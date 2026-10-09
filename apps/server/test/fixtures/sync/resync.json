@@ -1,0 +1,19 @@
+[
+  {
+    "fullResync": true,
+    "items": [
+      {
+        "kind": "event",
+        "data": {
+          "source": "google_calendar",
+          "externalId": "evt-standup",
+          "title": "Standup",
+          "start": "2026-10-09T13:00:00.000Z",
+          "end": "2026-10-09T13:30:00.000Z",
+          "allDay": false,
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      }
+    ]
+  }
+]

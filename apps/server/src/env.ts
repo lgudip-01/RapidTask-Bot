@@ -4,6 +4,7 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
   APP_TIMEZONE: z.string().default('America/New_York'),
+  DATABASE_PATH: z.string().default('./data/planner.db'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
