@@ -3,7 +3,7 @@ import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../db/client';
 import { calendarEvents, syncState, tasks } from '../db/schema';
-import type { EventInput, SyncBatch, SyncSource, TaskInput } from './types';
+import type { EventInput, SyncBatch, SyncItem, SyncSource, TaskInput } from './types';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -70,39 +70,57 @@ function upsertTask(tx: Tx, t: TaskInput, now: Date) {
     .run();
 }
 
+function applyItems(tx: Tx, items: SyncItem[], now: Date) {
+  let upserted = 0;
+  let deleted = 0;
+  const seenEvents = new Map<Source, string[]>();
+  const seenTasks = new Map<Source, string[]>();
+  const remember = (m: Map<Source, string[]>, s: Source, id: string) => {
+    const list = m.get(s);
+    if (list) list.push(id);
+    else m.set(s, [id]);
+  };
+
+  for (const item of items) {
+    if (item.kind === 'event') {
+      assertSyncable(item.data.source);
+      upsertEvent(tx, item.data, now);
+      remember(seenEvents, item.data.source, item.data.externalId);
+      upserted++;
+    } else if (item.kind === 'task') {
+      assertSyncable(item.data.source);
+      upsertTask(tx, item.data, now);
+      remember(seenTasks, item.data.source, item.data.externalId);
+      upserted++;
+    } else {
+      assertSyncable(item.source);
+      const table = item.entity === 'event' ? calendarEvents : tasks;
+      deleted += tx
+        .delete(table)
+        .where(and(eq(table.source, item.source), eq(table.externalId, item.externalId)))
+        .run().changes;
+    }
+  }
+  return { upserted, deleted, seenEvents, seenTasks };
+}
+
+/** Applies items outside a sync run (e.g. right after a write to Google), without touching cursors. */
+export function upsertItems(db: Db, items: SyncItem[], now: Date): ApplyResult {
+  return db.transaction((tx) => {
+    const { upserted, deleted } = applyItems(tx, items, now);
+    return { upserted, deleted };
+  });
+}
+
 /**
  * Stores one batch atomically: items, deletes, and the advanced cursor commit together,
  * so a failure anywhere leaves the previous cursor in place and nothing half-written.
  */
 export function applySyncBatch(db: Db, src: SyncSource, batch: SyncBatch, now: Date): ApplyResult {
   return db.transaction((tx) => {
-    let upserted = 0;
-    let deleted = 0;
-    const seenEvents = new Map<Source, string[]>();
-    const seenTasks = new Map<Source, string[]>();
-    const remember = (m: Map<Source, string[]>, s: Source, id: string) =>
-      m.set(s, [...(m.get(s) ?? []), id]);
-
-    for (const item of batch.items) {
-      if (item.kind === 'event') {
-        assertSyncable(item.data.source);
-        upsertEvent(tx, item.data, now);
-        remember(seenEvents, item.data.source, item.data.externalId);
-        upserted++;
-      } else if (item.kind === 'task') {
-        assertSyncable(item.data.source);
-        upsertTask(tx, item.data, now);
-        remember(seenTasks, item.data.source, item.data.externalId);
-        upserted++;
-      } else {
-        assertSyncable(item.source);
-        const table = item.entity === 'event' ? calendarEvents : tasks;
-        deleted += tx
-          .delete(table)
-          .where(and(eq(table.source, item.source), eq(table.externalId, item.externalId)))
-          .run().changes;
-      }
-    }
+    const applied = applyItems(tx, batch.items, now);
+    const { upserted, seenEvents, seenTasks } = applied;
+    let { deleted } = applied;
 
     if (batch.fullResync) {
       for (const [table, owned, seen] of [

@@ -1,0 +1,42 @@
+{
+  "kind": "calendar#events",
+  "summary": "owner@example.com",
+  "timeZone": "America/New_York",
+  "accessRole": "owner",
+  "nextSyncToken": "SYNC-1",
+  "items": [
+    {
+      "kind": "calendar#event",
+      "id": "phys201_20261014T130000Z",
+      "status": "confirmed",
+      "updated": "2026-08-20T15:00:00.000Z",
+      "summary": "PHYS 201 Lecture",
+      "recurringEventId": "phys201",
+      "start": { "dateTime": "2026-10-14T09:00:00-04:00", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-10-14T10:15:00-04:00", "timeZone": "America/New_York" }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "london1",
+      "status": "confirmed",
+      "updated": "2026-10-01T09:00:00.000Z",
+      "summary": "Call with London team",
+      "start": { "dateTime": "2026-10-20T15:00:00+01:00", "timeZone": "Europe/London" },
+      "end": { "dateTime": "2026-10-20T16:00:00+01:00", "timeZone": "Europe/London" }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "old-cancelled",
+      "status": "cancelled"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "wl1",
+      "status": "confirmed",
+      "eventType": "workingLocation",
+      "summary": "Home",
+      "start": { "date": "2026-10-09" },
+      "end": { "date": "2026-10-10" }
+    }
+  ]
+}

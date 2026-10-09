@@ -1,0 +1,37 @@
+{
+  "kind": "calendar#events",
+  "summary": "owner@example.com",
+  "timeZone": "America/New_York",
+  "accessRole": "owner",
+  "nextPageToken": "PAGE-2",
+  "items": [
+    {
+      "kind": "calendar#event",
+      "id": "standup1",
+      "status": "confirmed",
+      "updated": "2026-10-01T00:00:00.000Z",
+      "summary": "Standup",
+      "start": { "dateTime": "2026-10-09T09:00:00-04:00", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-10-09T09:15:00-04:00", "timeZone": "America/New_York" }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "allday1",
+      "status": "confirmed",
+      "updated": "2026-09-30T12:00:00.000Z",
+      "summary": "Mom's birthday",
+      "start": { "date": "2026-10-09" },
+      "end": { "date": "2026-10-10" }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "phys201_20261012T130000Z",
+      "status": "confirmed",
+      "updated": "2026-08-20T15:00:00.000Z",
+      "summary": "PHYS 201 Lecture",
+      "recurringEventId": "phys201",
+      "start": { "dateTime": "2026-10-12T09:00:00-04:00", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-10-12T10:15:00-04:00", "timeZone": "America/New_York" }
+    }
+  ]
+}

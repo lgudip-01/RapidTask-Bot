@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createApp } from '../src/app';
+import { createApp, type AppDeps } from '../src/app';
 import { createDb } from '../src/db/client';
 import { FakeSource, type FixturePage } from '../src/sync/fake-source';
 import { SyncScheduler } from '../src/sync/scheduler';
@@ -21,7 +21,11 @@ export function fakeSource(pagesFixture: string, name = 'fake') {
 }
 
 /** Manual clock + timer capture so scheduler tests are deterministic. */
-export function makeTestEnv(sources: SyncSource[], startAt = '2026-10-09T16:00:00.000Z') {
+export function makeTestEnv(
+  sources: SyncSource[],
+  startAt = '2026-10-09T16:00:00.000Z',
+  extra: Partial<Pick<AppDeps, 'calendar'>> = {},
+) {
   let nowMs = Date.parse(startAt);
   const timers: { fn: () => void; ms: number }[] = [];
   const db = createDb(':memory:');
@@ -32,7 +36,7 @@ export function makeTestEnv(sources: SyncSource[], startAt = '2026-10-09T16:00:0
     setTimer: (fn, ms) => timers.push({ fn, ms }),
     clearTimer: () => {},
   });
-  const app = createApp({ db, scheduler, now });
+  const app = createApp({ db, scheduler, now, ...extra });
   return {
     db,
     scheduler,

@@ -8,10 +8,12 @@
     "build": "tsup",
     "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "auth:google": "tsx --env-file-if-exists=../../.env src/google/auth-cli.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.4",
+    "@napi-rs/keyring": "^2.1.0",
     "@planner/shared": "*",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",

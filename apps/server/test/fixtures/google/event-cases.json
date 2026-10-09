@@ -1,0 +1,103 @@
+{
+  "allDaySingle": {
+    "kind": "calendar#event",
+    "id": "allday1",
+    "status": "confirmed",
+    "htmlLink": "https://www.google.com/calendar/event?eid=YWxsZGF5MQ",
+    "updated": "2026-09-30T12:00:00.000Z",
+    "summary": "Mom's birthday",
+    "start": { "date": "2026-10-09" },
+    "end": { "date": "2026-10-10" },
+    "eventType": "default"
+  },
+  "allDayAcrossDst": {
+    "kind": "calendar#event",
+    "id": "allday2",
+    "status": "confirmed",
+    "updated": "2026-09-30T12:00:00.000Z",
+    "summary": "Family visit",
+    "start": { "date": "2026-10-31" },
+    "end": { "date": "2026-11-03" }
+  },
+  "recurringInstance": {
+    "kind": "calendar#event",
+    "id": "phys201_20261012T130000Z",
+    "status": "confirmed",
+    "updated": "2026-08-20T15:00:00.000Z",
+    "summary": "PHYS 201 Lecture",
+    "location": "Hall B",
+    "recurringEventId": "phys201",
+    "originalStartTime": {
+      "dateTime": "2026-10-12T09:00:00-04:00",
+      "timeZone": "America/New_York"
+    },
+    "start": { "dateTime": "2026-10-12T09:00:00-04:00", "timeZone": "America/New_York" },
+    "end": { "dateTime": "2026-10-12T10:15:00-04:00", "timeZone": "America/New_York" }
+  },
+  "recurringInstanceAfterDst": {
+    "kind": "calendar#event",
+    "id": "phys201_20261102T140000Z",
+    "status": "confirmed",
+    "updated": "2026-08-20T15:00:00.000Z",
+    "summary": "PHYS 201 Lecture",
+    "recurringEventId": "phys201",
+    "originalStartTime": {
+      "dateTime": "2026-11-02T09:00:00-05:00",
+      "timeZone": "America/New_York"
+    },
+    "start": { "dateTime": "2026-11-02T09:00:00-05:00", "timeZone": "America/New_York" },
+    "end": { "dateTime": "2026-11-02T10:15:00-05:00", "timeZone": "America/New_York" }
+  },
+  "cancelledInstance": {
+    "kind": "calendar#event",
+    "id": "phys201_20261014T130000Z",
+    "status": "cancelled",
+    "recurringEventId": "phys201",
+    "originalStartTime": { "dateTime": "2026-10-14T09:00:00-04:00", "timeZone": "America/New_York" }
+  },
+  "londonTimed": {
+    "kind": "calendar#event",
+    "id": "london1",
+    "status": "confirmed",
+    "updated": "2026-10-01T09:00:00.000Z",
+    "summary": "Call with London team",
+    "start": { "dateTime": "2026-10-20T15:00:00+01:00", "timeZone": "Europe/London" },
+    "end": { "dateTime": "2026-10-20T16:00:00+01:00", "timeZone": "Europe/London" }
+  },
+  "noOffsetLosAngeles": {
+    "kind": "calendar#event",
+    "id": "la1",
+    "status": "confirmed",
+    "updated": "2026-10-01T09:00:00.000Z",
+    "summary": "Interview (PT)",
+    "start": { "dateTime": "2026-10-21T09:00:00", "timeZone": "America/Los_Angeles" },
+    "end": { "dateTime": "2026-10-21T10:00:00", "timeZone": "America/Los_Angeles" }
+  },
+  "utc": {
+    "kind": "calendar#event",
+    "id": "utc1",
+    "status": "confirmed",
+    "updated": "2026-10-01T09:00:00.000Z",
+    "summary": "  Deploy window  ",
+    "start": { "dateTime": "2026-10-22T18:00:00Z" },
+    "end": { "dateTime": "2026-10-22T19:00:00Z" }
+  },
+  "noTitle": {
+    "kind": "calendar#event",
+    "id": "untitled1",
+    "status": "tentative",
+    "updated": "2026-10-01T09:00:00.000Z",
+    "start": { "dateTime": "2026-10-23T12:00:00-04:00" },
+    "end": { "dateTime": "2026-10-23T12:30:00-04:00" }
+  },
+  "workingLocation": {
+    "kind": "calendar#event",
+    "id": "wl1",
+    "status": "confirmed",
+    "eventType": "workingLocation",
+    "updated": "2026-10-01T09:00:00.000Z",
+    "summary": "Home",
+    "start": { "date": "2026-10-09" },
+    "end": { "date": "2026-10-10" }
+  }
+}

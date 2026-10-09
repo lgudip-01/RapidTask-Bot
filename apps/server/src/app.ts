@@ -4,6 +4,7 @@ import type { Db } from './db/client';
 import { log, sanitizeError } from './log';
 import { agendaRoutes } from './routes/agenda';
 import { syncRoutes } from './routes/sync';
+import { calendarRoutes, type CalendarWriter } from './routes/calendar';
 import { taskRoutes } from './routes/tasks';
 import type { SyncScheduler } from './sync/scheduler';
 
@@ -11,6 +12,8 @@ export interface AppDeps {
   db: Db;
   scheduler: SyncScheduler;
   now: () => Date;
+  /** Present when Google is configured; calendar write routes answer 503 otherwise. */
+  calendar?: CalendarWriter;
 }
 
 export function createApp(deps: AppDeps) {
@@ -27,6 +30,7 @@ export function createApp(deps: AppDeps) {
   app.route('/api/agenda', agendaRoutes(deps));
   app.route('/api/tasks', taskRoutes(deps));
   app.route('/api/sync', syncRoutes(deps));
+  app.route('/api/calendar', calendarRoutes(deps));
 
   return app;
 }

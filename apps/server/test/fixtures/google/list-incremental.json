@@ -1,0 +1,28 @@
+{
+  "kind": "calendar#events",
+  "summary": "owner@example.com",
+  "timeZone": "America/New_York",
+  "accessRole": "owner",
+  "nextSyncToken": "SYNC-2",
+  "items": [
+    {
+      "kind": "calendar#event",
+      "id": "standup1",
+      "status": "confirmed",
+      "updated": "2026-10-09T11:00:00.000Z",
+      "summary": "Standup (moved)",
+      "start": { "dateTime": "2026-10-09T10:00:00-04:00", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-10-09T10:15:00-04:00", "timeZone": "America/New_York" }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "phys201_20261014T130000Z",
+      "status": "cancelled",
+      "recurringEventId": "phys201",
+      "originalStartTime": {
+        "dateTime": "2026-10-14T09:00:00-04:00",
+        "timeZone": "America/New_York"
+      }
+    }
+  ]
+}

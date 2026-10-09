@@ -135,3 +135,53 @@ export type AgendaItem = z.infer<typeof AgendaItemSchema>;
 
 export const AgendaResponseSchema = z.object({ items: z.array(AgendaItemSchema) });
 export type AgendaResponse = z.infer<typeof AgendaResponseSchema>;
+
+export const IsoDate = z.iso.date();
+
+/** When an event happens: all-day dates (end exclusive) or timed instants. */
+export const EventTimesSchema = z.union([
+  z
+    .object({ allDay: z.literal(true), startDate: IsoDate, endDate: IsoDate })
+    .strict()
+    .refine((t) => t.startDate < t.endDate, {
+      message: '`endDate` (exclusive) must be after `startDate`',
+    }),
+  z
+    .object({ allDay: z.literal(false), start: IsoDateTime, end: IsoDateTime })
+    .strict()
+    .refine((t) => Date.parse(t.start) < Date.parse(t.end), {
+      message: '`end` must be after `start`',
+    }),
+]);
+export type EventTimes = z.infer<typeof EventTimesSchema>;
+
+/**
+ * Writes to an external calendar must be confirmed explicitly. Without `confirm: true` the
+ * server answers 400 `confirmation_required` with a preview and changes nothing.
+ */
+const Confirm = z.boolean().optional();
+
+export const NewEventSchema = z
+  .object({
+    title: Title,
+    when: EventTimesSchema,
+    location: z.string().max(500).nullish(),
+    description: z.string().max(8000).nullish(),
+    calendarId: z.string().min(1).optional(),
+    confirm: Confirm,
+  })
+  .strict();
+export type NewEvent = z.input<typeof NewEventSchema>;
+
+export const EventPatchSchema = z
+  .object({
+    title: Title.optional(),
+    when: EventTimesSchema.optional(),
+    location: z.string().max(500).nullish(),
+    description: z.string().max(8000).nullish(),
+    confirm: Confirm,
+  })
+  .strict();
+export type EventPatch = z.input<typeof EventPatchSchema>;
+
+export const ConfirmSchema = z.object({ confirm: Confirm }).strict();
