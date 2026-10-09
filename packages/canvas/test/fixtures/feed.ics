@@ -1,0 +1,29 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Instructure//Canvas//EN
+X-WR-CALNAME:Owner Calendar (Canvas)
+BEGIN:VEVENT
+DTEND:20261010T035959Z
+DTSTAMP:20261009T120000Z
+DTSTART:20261010T035959Z
+SUMMARY:Problem Set 4 [PHYS 201]
+UID:event-assignment-1001
+URL;VALUE=URI:https://canvas.example.edu/calendar?include_contexts=course_101#assignment_1001
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261013
+DTEND;VALUE=DATE:20261014
+DTSTAMP:20261009T120000Z
+SUMMARY:No class — Fall break [MATH 221]
+UID:event-calendar-event-502
+DESCRIPTION:Enjoy the break\, see you Thursday\nBring notes
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/Chicago:20261015T170000
+DTEND;TZID=America/Chicago:20261015T183000
+DTSTAMP:20261009T120000Z
+SUMMARY:PHYS 201 Midterm Review with a very long title that is folded across
+  lines [PHYS 201]
+UID:event-calendar-event-501
+END:VEVENT
+END:VCALENDAR

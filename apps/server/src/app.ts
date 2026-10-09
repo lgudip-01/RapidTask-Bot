@@ -5,6 +5,7 @@ import { log, sanitizeError } from './log';
 import { agendaRoutes } from './routes/agenda';
 import { syncRoutes } from './routes/sync';
 import { calendarRoutes, type CalendarWriter } from './routes/calendar';
+import { canvasRoutes } from './routes/canvas';
 import { taskRoutes } from './routes/tasks';
 import type { SyncScheduler } from './sync/scheduler';
 
@@ -31,6 +32,7 @@ export function createApp(deps: AppDeps) {
   app.route('/api/tasks', taskRoutes(deps));
   app.route('/api/sync', syncRoutes(deps));
   app.route('/api/calendar', calendarRoutes(deps));
+  app.route('/api', canvasRoutes(deps));
 
   return app;
 }

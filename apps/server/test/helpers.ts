@@ -15,8 +15,8 @@ export function loadFixture<T = unknown>(rel: string): T {
 
 export function fakeSource(pagesFixture: string, name = 'fake') {
   return new FakeSource(name, loadFixture<FixturePage[]>(pagesFixture), {
-    events: ['google_calendar'],
-    tasks: ['canvas', 'google_tasks'],
+    event: ['google_calendar'],
+    task: ['canvas', 'google_tasks'],
   });
 }
 

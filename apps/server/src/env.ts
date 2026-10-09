@@ -30,6 +30,15 @@ const EnvSchema = z.object({
     ),
   GOOGLE_SYNC_INTERVAL_MINUTES: z.coerce.number().positive().default(10),
   GOOGLE_SYNC_LOOKBACK_DAYS: z.coerce.number().int().nonnegative().default(30),
+
+  // Canvas (read-only). REST if base URL + token are set; otherwise the iCal feed if set.
+  CANVAS_BASE_URL: optionalString.pipe(z.url().optional()),
+  CANVAS_TOKEN: optionalString,
+  CANVAS_ICS_URL: optionalString.pipe(z.url().optional()),
+  CANVAS_SYNC_INTERVAL_MINUTES: z.coerce.number().positive().default(30),
+  CANVAS_LOOKBACK_DAYS: z.coerce.number().int().nonnegative().default(30),
+  CANVAS_LOOKAHEAD_DAYS: z.coerce.number().int().positive().default(120),
+  CANVAS_SYNC_GRADES: z.stringbool().default(true),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -1,5 +1,5 @@
-import type { CalendarEvent, SyncStatus, Task } from '@planner/shared';
-import type { EventRow, SyncStateRow, TaskRow } from './schema';
+import type { Announcement, CalendarEvent, Course, SyncStatus, Task } from '@planner/shared';
+import type { AnnouncementRow, CourseRow, EventRow, SyncStateRow, TaskRow } from './schema';
 
 const iso = (d: Date) => d.toISOString();
 const isoOrNull = (d: Date | null) => (d ? d.toISOString() : null);
@@ -39,4 +39,17 @@ export function toSyncStatusJson(
     nextRunAt: isoOrNull(r?.nextRunAt ?? null),
     running,
   };
+}
+
+export function toCourseJson(r: CourseRow, includeGrades: boolean): Course {
+  return {
+    ...r,
+    currentScore: includeGrades ? r.currentScore : null,
+    currentGrade: includeGrades ? r.currentGrade : null,
+    syncedAt: iso(r.syncedAt),
+  };
+}
+
+export function toAnnouncementJson(r: AnnouncementRow): Announcement {
+  return { ...r, postedAt: iso(r.postedAt), syncedAt: iso(r.syncedAt) };
 }

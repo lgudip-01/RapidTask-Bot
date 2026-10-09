@@ -13,6 +13,18 @@ export const PRIORITIES = ['low', 'medium', 'high'] as const;
 export const PrioritySchema = z.enum(PRIORITIES);
 export type Priority = z.infer<typeof PrioritySchema>;
 
+/** Canvas submission state for assignment tasks (null for other sources). */
+export const SUBMISSION_STATUSES = [
+  'unsubmitted',
+  'submitted',
+  'graded',
+  'late',
+  'missing',
+  'excused',
+] as const;
+export const SubmissionStatusSchema = z.enum(SUBMISSION_STATUSES);
+export type SubmissionStatus = z.infer<typeof SubmissionStatusSchema>;
+
 /** Timestamps cross the wire as ISO 8601 strings; the server stores UTC epoch ms. */
 export const IsoDateTime = z.iso.datetime({ offset: true });
 
@@ -49,6 +61,8 @@ export const TaskSchema = z.object({
   priority: PrioritySchema.nullable(),
   courseOrProject: z.string().nullable(),
   url: z.string().nullable(),
+  pointsPossible: z.number().nullable(),
+  submissionStatus: SubmissionStatusSchema.nullable(),
   sortOrder: z.number(),
   createdAt: IsoDateTime,
   completedAt: IsoDateTime.nullable(),
@@ -185,3 +199,31 @@ export const EventPatchSchema = z
 export type EventPatch = z.input<typeof EventPatchSchema>;
 
 export const ConfirmSchema = z.object({ confirm: Confirm }).strict();
+
+/** A course from an LMS. Grades are stored but the UI hides them unless enabled. */
+export const CourseSchema = z.object({
+  id: z.string(),
+  source: SourceSchema,
+  externalId: z.string(),
+  name: z.string(),
+  courseCode: z.string().nullable(),
+  termName: z.string().nullable(),
+  currentScore: z.number().nullable(),
+  currentGrade: z.string().nullable(),
+  url: z.string().nullable(),
+  syncedAt: IsoDateTime,
+});
+export type Course = z.infer<typeof CourseSchema>;
+
+/** Announcement metadata only (title, never the body). */
+export const AnnouncementSchema = z.object({
+  id: z.string(),
+  source: SourceSchema,
+  externalId: z.string(),
+  title: z.string(),
+  courseName: z.string().nullable(),
+  postedAt: IsoDateTime,
+  url: z.string().nullable(),
+  syncedAt: IsoDateTime,
+});
+export type Announcement = z.infer<typeof AnnouncementSchema>;

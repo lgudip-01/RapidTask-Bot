@@ -1,4 +1,3 @@
-import type { Source } from '@planner/shared';
 import type { SyncBatch, SyncItem, SyncSource } from './types';
 
 /** JSON shape of a fixture page: like SyncBatch, but dates are ISO strings. */
@@ -30,7 +29,7 @@ export class FakeSource implements SyncSource {
   constructor(
     public readonly name: string,
     private readonly pages: FixturePage[],
-    public readonly owns: { events: Source[]; tasks: Source[] },
+    public readonly owns: SyncSource['owns'],
     public readonly intervalMs = 60_000,
     public failOn: Set<number> = new Set(),
   ) {}

@@ -1,4 +1,10 @@
-import { SOURCES, PRIORITIES, SUGGESTION_STATUSES, TASK_STATUSES } from '@planner/shared';
+import {
+  PRIORITIES,
+  SOURCES,
+  SUBMISSION_STATUSES,
+  SUGGESTION_STATUSES,
+  TASK_STATUSES,
+} from '@planner/shared';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /** All timestamps are UTC epoch milliseconds. */
@@ -43,6 +49,8 @@ export const tasks = sqliteTable(
     priority: text('priority', { enum: PRIORITIES }),
     courseOrProject: text('course_or_project'),
     url: text('url'),
+    pointsPossible: real('points_possible'),
+    submissionStatus: text('submission_status', { enum: SUBMISSION_STATUSES }),
     sortOrder: real('sort_order').notNull().default(0),
     createdAt: ts('created_at').notNull(),
     completedAt: ts('completed_at'),
@@ -76,6 +84,44 @@ export const syncState = sqliteTable('sync_state', {
   nextRunAt: ts('next_run_at'),
 });
 
+export const courses = sqliteTable(
+  'courses',
+  {
+    id: text('id').primaryKey(),
+    source: text('source', { enum: SOURCES }).notNull(),
+    externalId: text('external_id').notNull(),
+    name: text('name').notNull(),
+    courseCode: text('course_code'),
+    termName: text('term_name'),
+    currentScore: real('current_score'),
+    currentGrade: text('current_grade'),
+    url: text('url'),
+    syncedAt: ts('synced_at').notNull(),
+  },
+  (t) => [uniqueIndex('courses_source_ext_uq').on(t.source, t.externalId)],
+);
+
+/** Titles only; announcement bodies are never stored. */
+export const announcements = sqliteTable(
+  'announcements',
+  {
+    id: text('id').primaryKey(),
+    source: text('source', { enum: SOURCES }).notNull(),
+    externalId: text('external_id').notNull(),
+    title: text('title').notNull(),
+    courseName: text('course_name'),
+    postedAt: ts('posted_at').notNull(),
+    url: text('url'),
+    syncedAt: ts('synced_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('announcements_source_ext_uq').on(t.source, t.externalId),
+    index('announcements_posted_idx').on(t.postedAt),
+  ],
+);
+
 export type EventRow = typeof calendarEvents.$inferSelect;
 export type TaskRow = typeof tasks.$inferSelect;
 export type SyncStateRow = typeof syncState.$inferSelect;
+export type CourseRow = typeof courses.$inferSelect;
+export type AnnouncementRow = typeof announcements.$inferSelect;

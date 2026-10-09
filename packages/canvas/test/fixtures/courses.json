@@ -1,0 +1,122 @@
+[
+  {
+    "id": "101",
+    "name": "PHYS 201: Classical Mechanics",
+    "course_code": "PHYS 201",
+    "workflow_state": "available",
+    "start_at": null,
+    "end_at": null,
+    "concluded": false,
+    "enrollment_term_id": "7",
+    "term": {
+      "id": "7",
+      "name": "Fall 2026",
+      "start_at": "2026-08-24T04:00:00Z",
+      "end_at": "2026-12-20T05:00:00Z"
+    },
+    "enrollments": [
+      {
+        "type": "student",
+        "enrollment_state": "active",
+        "computed_current_score": 91.4,
+        "computed_current_grade": "A-"
+      }
+    ]
+  },
+  {
+    "id": "102",
+    "name": "MATH 221: Calculus III",
+    "course_code": "MATH 221",
+    "workflow_state": "available",
+    "start_at": null,
+    "end_at": null,
+    "concluded": false,
+    "term": {
+      "id": "7",
+      "name": "Fall 2026",
+      "start_at": "2026-08-24T04:00:00Z",
+      "end_at": "2026-12-20T05:00:00Z"
+    },
+    "enrollments": [
+      {
+        "type": "student",
+        "enrollment_state": "active",
+        "computed_current_score": 84.0,
+        "computed_current_grade": "B"
+      }
+    ]
+  },
+  {
+    "id": "90",
+    "name": "CHEM 101: General Chemistry",
+    "course_code": "CHEM 101",
+    "workflow_state": "available",
+    "start_at": null,
+    "end_at": null,
+    "concluded": false,
+    "term": {
+      "id": "6",
+      "name": "Spring 2026",
+      "start_at": "2026-01-12T05:00:00Z",
+      "end_at": "2026-05-15T04:00:00Z"
+    },
+    "enrollments": [{ "type": "student", "enrollment_state": "active" }]
+  },
+  {
+    "id": "120",
+    "name": "BIO 110: Ecology",
+    "course_code": "BIO 110",
+    "workflow_state": "available",
+    "start_at": null,
+    "end_at": null,
+    "concluded": false,
+    "term": {
+      "id": "8",
+      "name": "Spring 2027",
+      "start_at": "2027-01-11T05:00:00Z",
+      "end_at": "2027-05-14T04:00:00Z"
+    },
+    "enrollments": [{ "type": "student", "enrollment_state": "active" }]
+  },
+  {
+    "id": "5",
+    "name": "Student Success Orientation",
+    "course_code": "ORIENT",
+    "workflow_state": "available",
+    "start_at": null,
+    "end_at": null,
+    "concluded": false,
+    "term": { "id": "1", "name": "Default Term", "start_at": null, "end_at": null },
+    "enrollments": [{ "type": "student", "enrollment_state": "active" }]
+  },
+  {
+    "id": "88",
+    "name": "ENGL 105: Writing",
+    "course_code": "ENGL 105",
+    "workflow_state": "available",
+    "concluded": true,
+    "term": {
+      "id": "9",
+      "name": "Summer 2026",
+      "start_at": "2026-06-01T04:00:00Z",
+      "end_at": "2026-08-10T04:00:00Z"
+    },
+    "enrollments": [{ "type": "student", "enrollment_state": "active" }]
+  },
+  {
+    "id": "95",
+    "name": "Undergraduate Research Lab",
+    "course_code": "RES 300",
+    "workflow_state": "available",
+    "start_at": "2026-01-12T05:00:00Z",
+    "end_at": "2026-12-31T05:00:00Z",
+    "concluded": false,
+    "term": {
+      "id": "6",
+      "name": "Spring 2026",
+      "start_at": "2026-01-12T05:00:00Z",
+      "end_at": "2026-05-15T04:00:00Z"
+    },
+    "enrollments": [{ "type": "student", "enrollment_state": "active" }]
+  }
+]

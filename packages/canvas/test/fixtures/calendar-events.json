@@ -1,0 +1,30 @@
+[
+  {
+    "id": "501",
+    "title": "PHYS 201 Midterm Review",
+    "start_at": "2026-10-15T22:00:00Z",
+    "end_at": "2026-10-15T23:30:00Z",
+    "all_day": false,
+    "all_day_date": "2026-10-15",
+    "location_name": "Hall B",
+    "description": "<p>Bring your formula sheet.</p>",
+    "html_url": "https://canvas.example.edu/calendar?event_id=501&include_contexts=course_101",
+    "context_code": "course_101",
+    "context_name": "PHYS 201: Classical Mechanics",
+    "workflow_state": "active",
+    "updated_at": "2026-10-01T12:00:00Z"
+  },
+  {
+    "id": "502",
+    "title": "No class — Fall break",
+    "start_at": "2026-10-13T04:00:00Z",
+    "end_at": "2026-10-13T04:00:00Z",
+    "all_day": true,
+    "all_day_date": "2026-10-13",
+    "location_name": null,
+    "html_url": "https://canvas.example.edu/calendar?event_id=502&include_contexts=course_102",
+    "context_code": "course_102",
+    "workflow_state": "active",
+    "updated_at": "2026-09-01T12:00:00Z"
+  }
+]

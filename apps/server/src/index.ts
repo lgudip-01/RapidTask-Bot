@@ -1,5 +1,8 @@
 import { serve } from '@hono/node-server';
+import { CanvasClient } from '@planner/canvas';
 import { createApp } from './app';
+import { CanvasIcsSource } from './canvas/canvas-ics-source';
+import { CanvasSource } from './canvas/canvas-source';
 import { createDb } from './db/client';
 import { loadEnv } from './env';
 import { GoogleCalendarClient } from './google/calendar-client';
@@ -39,6 +42,30 @@ if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
   log.info('google calendar enabled', { tokenStore: store.kind });
 } else {
   log.info('google calendar disabled (GOOGLE_CLIENT_ID/SECRET not set)');
+}
+
+if (env.CANVAS_BASE_URL && env.CANVAS_TOKEN) {
+  const client = new CanvasClient({ baseUrl: env.CANVAS_BASE_URL, token: env.CANVAS_TOKEN });
+  sources.push(
+    new CanvasSource(client, {
+      baseUrl: env.CANVAS_BASE_URL,
+      appTimeZone: env.APP_TIMEZONE,
+      intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
+      lookbackDays: env.CANVAS_LOOKBACK_DAYS,
+      lookaheadDays: env.CANVAS_LOOKAHEAD_DAYS,
+      includeGrades: env.CANVAS_SYNC_GRADES,
+    }),
+  );
+  log.info('canvas enabled', { mode: 'rest' });
+} else if (env.CANVAS_ICS_URL) {
+  sources.push(
+    new CanvasIcsSource({
+      feedUrl: env.CANVAS_ICS_URL,
+      appTimeZone: env.APP_TIMEZONE,
+      intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
+    }),
+  );
+  log.info('canvas enabled', { mode: 'ics' });
 }
 
 const scheduler = new SyncScheduler(db, sources);

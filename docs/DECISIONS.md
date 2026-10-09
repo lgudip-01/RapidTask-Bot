@@ -90,3 +90,38 @@ Newest at the bottom. Each entry: context → decision → consequences.
 - Installed into `~/.mcp-servers/google-calendar-mcp` with an exact version and a lockfile
   (`--ignore-scripts`), registered at **local** scope (not committed), and restricted with
   `ENABLED_TOOLS` to read-only tools so Claude Code cannot modify the real calendar.
+
+## 010 — Backend calls Canvas REST directly, not through an MCP server (2026-10-09)
+
+**Recommendation: direct REST from the backend.** MCP is only for Claude Code during development.
+
+- MCP is a protocol for exposing tools to an LLM client. The sync job is a deterministic,
+  scheduled, non-LLM process: it needs typed pagination, throttling, retries, and recorded-fixture
+  tests. An MCP hop adds a second process, a JSON-RPC layer, and failure modes with no benefit.
+- Security: one code path holds the token (header-only, pinned to the Canvas origin, GET-only).
+  Routing through MCP would add another component that touches the token and an LLM-oriented
+  surface to the production backend.
+- Reuse without coupling: both the server and the dev MCP server import the same
+  `@planner/canvas` client (`packages/canvas`), so there is no duplicated API logic.
+- `packages/mcp-canvas` exposes `list_courses`, `list_assignments`, `get_assignment` (all
+  `readOnlyHint`), returns assignment descriptions only as stripped plain text under
+  `description_untrusted`, and is registered at local scope with
+  `node --env-file-if-exists=<repo>/.env packages/mcp-canvas/dist/index.js`, so the token lives
+  only in `.env`.
+
+## 011 — Canvas sync (2026-10-09)
+
+- Read-only by construction: the client has no non-GET method. Requests send
+  `Accept: application/json+canvas-string-ids`; `Link` URLs are followed opaquely but only on the
+  configured origin; `X-Rate-Limit-Remaining < 100` pauses 2 s; 403 "Rate Limit Exceeded" retries
+  with backoff (×3).
+- Current term = not concluded/restricted/unpublished, and the term window or the course's own
+  date window contains now (undated "Default Term" courses count as current).
+- Every run is a full listing (`fullResync`): Canvas has no change tokens and a term is small.
+- Assignments with a due date → tasks (`courseOrProject` = course name, `pointsPossible`,
+  `submissionStatus` = excused > missing > late > graded > submitted > unsubmitted; done for
+  everything except missing/unsubmitted). Local check-offs survive (`statusSetLocally`).
+- Calendar events → events (descriptions dropped). Announcements → `announcements` table, titles
+  only. Course grades → `courses` table; `GET /api/courses` omits them unless `includeGrades=true`.
+- Fallback when tokens are disabled: the personal calendar feed (`CANVAS_ICS_URL`, a secret URL).
+  Assignments → tasks with the same `assignment-<id>` ids (status unknown → todo).

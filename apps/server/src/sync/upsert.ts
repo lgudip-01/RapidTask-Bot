@@ -2,10 +2,26 @@ import type { Source } from '@planner/shared';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../db/client';
-import { calendarEvents, syncState, tasks } from '../db/schema';
-import type { EventInput, SyncBatch, SyncItem, SyncSource, TaskInput } from './types';
+import { announcements, calendarEvents, courses, syncState, tasks } from '../db/schema';
+import type {
+  AnnouncementInput,
+  CourseInput,
+  EventInput,
+  SyncBatch,
+  SyncEntity,
+  SyncItem,
+  SyncSource,
+  TaskInput,
+} from './types';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+const TABLES = {
+  event: calendarEvents,
+  task: tasks,
+  course: courses,
+  announcement: announcements,
+} as const;
 
 export interface ApplyResult {
   upserted: number;
@@ -44,6 +60,8 @@ function upsertTask(tx: Tx, t: TaskInput, now: Date) {
     priority: t.priority ?? null,
     courseOrProject: t.courseOrProject ?? null,
     url: t.url ?? null,
+    pointsPossible: t.pointsPossible ?? null,
+    submissionStatus: t.submissionStatus ?? null,
     updatedAt: t.updatedAt,
     syncedAt: now,
   };
@@ -70,38 +88,69 @@ function upsertTask(tx: Tx, t: TaskInput, now: Date) {
     .run();
 }
 
+function upsertCourse(tx: Tx, c: CourseInput, now: Date) {
+  const fields = {
+    name: c.name,
+    courseCode: c.courseCode ?? null,
+    termName: c.termName ?? null,
+    currentScore: c.currentScore ?? null,
+    currentGrade: c.currentGrade ?? null,
+    url: c.url ?? null,
+    syncedAt: now,
+  };
+  tx.insert(courses)
+    .values({ id: randomUUID(), source: c.source, externalId: c.externalId, ...fields })
+    .onConflictDoUpdate({ target: [courses.source, courses.externalId], set: fields })
+    .run();
+}
+
+function upsertAnnouncement(tx: Tx, a: AnnouncementInput, now: Date) {
+  const fields = {
+    title: a.title,
+    courseName: a.courseName ?? null,
+    postedAt: a.postedAt,
+    url: a.url ?? null,
+    syncedAt: now,
+  };
+  tx.insert(announcements)
+    .values({ id: randomUUID(), source: a.source, externalId: a.externalId, ...fields })
+    .onConflictDoUpdate({ target: [announcements.source, announcements.externalId], set: fields })
+    .run();
+}
+
+type Seen = Map<SyncEntity, Map<Source, string[]>>;
+
 function applyItems(tx: Tx, items: SyncItem[], now: Date) {
   let upserted = 0;
   let deleted = 0;
-  const seenEvents = new Map<Source, string[]>();
-  const seenTasks = new Map<Source, string[]>();
-  const remember = (m: Map<Source, string[]>, s: Source, id: string) => {
-    const list = m.get(s);
+  const seen: Seen = new Map();
+  const remember = (entity: SyncEntity, s: Source, id: string) => {
+    const bySource = seen.get(entity) ?? new Map<Source, string[]>();
+    seen.set(entity, bySource);
+    const list = bySource.get(s);
     if (list) list.push(id);
-    else m.set(s, [id]);
+    else bySource.set(s, [id]);
   };
 
   for (const item of items) {
-    if (item.kind === 'event') {
-      assertSyncable(item.data.source);
-      upsertEvent(tx, item.data, now);
-      remember(seenEvents, item.data.source, item.data.externalId);
-      upserted++;
-    } else if (item.kind === 'task') {
-      assertSyncable(item.data.source);
-      upsertTask(tx, item.data, now);
-      remember(seenTasks, item.data.source, item.data.externalId);
-      upserted++;
-    } else {
+    if (item.kind === 'delete') {
       assertSyncable(item.source);
-      const table = item.entity === 'event' ? calendarEvents : tasks;
+      const table = TABLES[item.entity];
       deleted += tx
         .delete(table)
         .where(and(eq(table.source, item.source), eq(table.externalId, item.externalId)))
         .run().changes;
+      continue;
     }
+    assertSyncable(item.data.source);
+    if (item.kind === 'event') upsertEvent(tx, item.data, now);
+    else if (item.kind === 'task') upsertTask(tx, item.data, now);
+    else if (item.kind === 'course') upsertCourse(tx, item.data, now);
+    else upsertAnnouncement(tx, item.data, now);
+    remember(item.kind, item.data.source, item.data.externalId);
+    upserted++;
   }
-  return { upserted, deleted, seenEvents, seenTasks };
+  return { upserted, deleted, seen };
 }
 
 /** Applies items outside a sync run (e.g. right after a write to Google), without touching cursors. */
@@ -119,17 +168,14 @@ export function upsertItems(db: Db, items: SyncItem[], now: Date): ApplyResult {
 export function applySyncBatch(db: Db, src: SyncSource, batch: SyncBatch, now: Date): ApplyResult {
   return db.transaction((tx) => {
     const applied = applyItems(tx, batch.items, now);
-    const { upserted, seenEvents, seenTasks } = applied;
     let { deleted } = applied;
 
     if (batch.fullResync) {
-      for (const [table, owned, seen] of [
-        [calendarEvents, src.owns.events, seenEvents],
-        [tasks, src.owns.tasks, seenTasks],
-      ] as const) {
+      for (const [entity, owned] of Object.entries(src.owns) as [SyncEntity, Source[]][]) {
+        const table = TABLES[entity];
         for (const source of owned) {
           assertSyncable(source);
-          const keep = seen.get(source) ?? [];
+          const keep = applied.seen.get(entity)?.get(source) ?? [];
           deleted += tx
             .delete(table)
             .where(
@@ -156,7 +202,7 @@ export function applySyncBatch(db: Db, src: SyncSource, batch: SyncBatch, now: D
       })
       .run();
 
-    return { upserted, deleted };
+    return { upserted: applied.upserted, deleted };
   });
 }
 

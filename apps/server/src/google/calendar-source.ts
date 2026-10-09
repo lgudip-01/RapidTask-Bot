@@ -21,7 +21,7 @@ type Cursor = Record<string, string>;
  */
 export class GoogleCalendarSource implements SyncSource {
   readonly name = 'google_calendar';
-  readonly owns = { events: ['google_calendar' as const], tasks: [] };
+  readonly owns = { event: ['google_calendar' as const] };
   readonly intervalMs: number;
   private readonly now: () => Date;
 
