@@ -1,11 +1,8 @@
 import type { Db } from '../db/client';
 import type { Env } from '../env';
-import type { GoogleCalendarClient } from '../google/calendar-client';
-import type { GoogleTasksClient } from '../google/tasks-client';
 import { log } from '../log';
-import { createClaudeExtractor } from '../parser/claude-extractor';
-import { MessageParser } from '../parser/parser';
-import { ItemCreator } from './creator';
+import type { MessageParser } from '../parser/parser';
+import type { ItemCreator } from './creator';
 import { InboundPipeline } from './pipeline';
 import { TelegramApi, TelegramChannel, TelegramPoller } from './telegram';
 import { TwilioChannel } from './twilio';
@@ -20,19 +17,12 @@ export interface InboundSetup {
 /** Builds whichever channels are fully configured. Returns null when none are. */
 export function createInbound(
   env: Env,
-  deps: {
-    db: Db;
-    now: () => Date;
-    calendar?: { client: GoogleCalendarClient; calendarId: string };
-    tasks?: GoogleTasksClient;
-  },
+  deps: { db: Db; now: () => Date; parser: MessageParser; creator: ItemCreator },
 ): InboundSetup | null {
-  const llm = env.PARSER_LLM_ENABLED && env.ANTHROPIC_API_KEY ? createClaudeExtractor(env) : null;
-  const parser = new MessageParser({ llm, timeZone: env.APP_TIMEZONE, now: deps.now });
   const pipeline = new InboundPipeline({
     db: deps.db,
-    parser,
-    creator: new ItemCreator({ ...deps, timeZone: env.APP_TIMEZONE }),
+    parser: deps.parser,
+    creator: deps.creator,
     timeZone: env.APP_TIMEZONE,
     now: deps.now,
     rateLimit: { limit: env.INBOUND_RATE_LIMIT_PER_10_MIN, windowMs: 10 * 60_000 },
@@ -80,6 +70,5 @@ export function createInbound(
   }
 
   if (!poller && !Object.keys(channels).length) return null;
-  log.info('message parser', { llm: Boolean(llm), model: llm ? env.PARSER_MODEL : null });
   return { pipeline, channels, poller };
 }

@@ -7,26 +7,34 @@ import { createDb } from './db/client';
 import { loadEnv } from './env';
 import { GoogleCalendarClient } from './google/calendar-client';
 import { GoogleCalendarSource } from './google/calendar-source';
-import { GoogleAuth } from './google/oauth';
+import { GOOGLE_REVOKE_URL, GoogleAuth, REFRESH_TOKEN_KEY } from './google/oauth';
 import { GoogleTasksClient } from './google/tasks-client';
+import { ItemCreator } from './inbound/creator';
 import { createInbound } from './inbound/setup';
+import { integrationStatus } from './integrations';
 import { log } from './log';
+import { createClaudeExtractor } from './parser/claude-extractor';
+import { MessageParser } from './parser/parser';
 import type { CalendarWriter } from './routes/calendar';
-import { createTokenStore } from './secrets/token-store';
+import { createTokenStore, type TokenStore } from './secrets/token-store';
+import { SettingsStore } from './settings';
 import { SyncScheduler } from './sync/scheduler';
 import type { SyncSource } from './sync/types';
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_PATH);
+const now = () => new Date();
+const settings = new SettingsStore(db, now);
 const sources: SyncSource[] = [];
 let calendar: CalendarWriter | undefined;
 let googleTasks: GoogleTasksClient | undefined;
+let tokenStore: TokenStore | null = null;
 
 if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-  const store = await createTokenStore(env);
+  tokenStore = await createTokenStore(env);
   const auth = new GoogleAuth(
     { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
-    store,
+    tokenStore,
   );
   const client = new GoogleCalendarClient(auth);
   sources.push(
@@ -43,9 +51,9 @@ if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     defaultCalendarId: env.GOOGLE_CALENDAR_IDS[0] ?? 'primary',
     appTimeZone: env.APP_TIMEZONE,
   };
-  log.info('google calendar enabled', { tokenStore: store.kind });
+  log.info('google enabled', { tokenStore: tokenStore.kind });
 } else {
-  log.info('google calendar disabled (GOOGLE_CLIENT_ID/SECRET not set)');
+  log.info('google disabled (GOOGLE_CLIENT_ID/SECRET not set)');
 }
 
 if (env.CANVAS_BASE_URL && env.CANVAS_TOKEN) {
@@ -72,20 +80,48 @@ if (env.CANVAS_BASE_URL && env.CANVAS_TOKEN) {
   log.info('canvas enabled', { mode: 'ics' });
 }
 
-const now = () => new Date();
-const scheduler = new SyncScheduler(db, sources);
-const inbound = createInbound(env, {
+// One parser and creator shared by the web quick-add and inbound messages.
+const llm = env.PARSER_LLM_ENABLED && env.ANTHROPIC_API_KEY ? createClaudeExtractor(env) : null;
+const parser = new MessageParser({
+  llm,
+  llmEnabled: () => settings.get().aiTriage,
+  timeZone: env.APP_TIMEZONE,
+  now,
+});
+const creator = new ItemCreator({
   db,
   now,
+  timeZone: env.APP_TIMEZONE,
   calendar: calendar && { client: calendar.client, calendarId: calendar.defaultCalendarId },
   tasks: googleTasks,
 });
+log.info('message parser', { llm: Boolean(llm), model: llm ? env.PARSER_MODEL : null });
+
+async function disconnectGoogle(store: TokenStore) {
+  const token = await store.get(REFRESH_TOKEN_KEY);
+  if (token) {
+    await fetch(GOOGLE_REVOKE_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }),
+    }).catch(() => undefined);
+  }
+  await store.delete(REFRESH_TOKEN_KEY);
+}
+
+const scheduler = new SyncScheduler(db, sources);
+const inbound = createInbound(env, { db, now, parser, creator });
 const app = createApp({
   db,
   scheduler,
   now,
+  timeZone: env.APP_TIMEZONE,
+  settings,
   calendar,
   inbound: inbound ? { pipeline: inbound.pipeline, channels: inbound.channels } : undefined,
+  capture: { parser, creator },
+  integrations: integrationStatus(env, { db, scheduler, tokenStore, llmAvailable: Boolean(llm) }),
+  disconnectGoogle: tokenStore ? () => disconnectGoogle(tokenStore!) : undefined,
 });
 
 scheduler.start();

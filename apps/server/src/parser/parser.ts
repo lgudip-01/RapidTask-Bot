@@ -36,6 +36,8 @@ interface Pending {
 
 export interface MessageParserOptions {
   llm: LlmExtractor | null;
+  /** Runtime switch (the "AI triage" setting). Defaults to on. */
+  llmEnabled?: () => boolean;
   timeZone: string;
   now: () => Date;
 }
@@ -68,7 +70,11 @@ export class MessageParser {
     return p;
   }
 
-  async parse(sender: string, rawText: string): Promise<ParseOutcome> {
+  async parse(
+    sender: string,
+    rawText: string,
+    opts: { allowLlm?: boolean } = {},
+  ): Promise<ParseOutcome> {
     const text = rawText.trim();
     if (!text) return { type: 'off_topic' };
     if (text.length > MAX_MESSAGE_CHARS) return { type: 'error', reason: 'too_long' };
@@ -79,11 +85,15 @@ export class MessageParser {
       const fast = tryFastParse(text, now, this.opts.timeZone);
       if (fast) return this.toCapture(fast, 'fast', now);
     }
-    if (!this.opts.llm) return { type: 'error', reason: 'llm_disabled' };
+    const llm =
+      this.opts.llm && opts.allowLlm !== false && (this.opts.llmEnabled?.() ?? true)
+        ? this.opts.llm
+        : null;
+    if (!llm) return { type: 'error', reason: 'llm_disabled' };
 
     let raw: unknown;
     try {
-      raw = await this.opts.llm.extract({
+      raw = await llm.extract({
         text,
         now,
         timeZone: this.opts.timeZone,

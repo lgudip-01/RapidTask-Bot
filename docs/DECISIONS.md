@@ -178,5 +178,23 @@ needs_clarification | off_topic`. `off_topic` was added beyond the original brie
   fails, the item is saved locally and the reply says so.
 - Drops (bad signature, non-allowlisted sender, duplicate, rate limit) log one line per reason per
   minute with a suppressed count, never the content or sender.
-- Gap: there is no Google Tasks *sync* source yet; completing a texted task in the Google Tasks app
+- Gap: there is no Google Tasks _sync_ source yet; completing a texted task in the Google Tasks app
   is not reflected locally until one is added.
+
+## 014 — Web UI (2026-10-09)
+
+- Views: Today (timeline + overdue + suggestions tray), Week (hand-built 7-column grid; no calendar
+  library — overlap layout is ~40 lines and theming a library would cost more), Tasks (list with
+  drag-to-reorder via `@dnd-kit`, board with drag between status columns), Suggestions inbox,
+  Settings (sources, allowlist, AI triage, grades toggle, theme).
+- Data: TanStack Query with optimistic updates (check-off, reorder, status, suggestions, settings)
+  that roll back on error. Every API response is zod-validated with the shared schemas.
+- Motion: `motion` (Framer Motion) for view transitions, shared-layout nav/segmented highlights,
+  staggered lists, check-mark drawing, week slide, toasts; `MotionConfig reducedMotion="user"`.
+- Theming: colors are CSS variables (light/dark) mapped into Tailwind v4 `@theme inline`; sources
+  have a color plus a text label, so color is never the only cue.
+- Quick add uses the server parser: `POST /api/parse` (fast path only, free) for the live preview,
+  `POST /api/capture` (AI if enabled) on Enter. The "AI triage" setting gates model calls at
+  runtime for both the web and inbound messages.
+- Rendering time zone: `VITE_APP_TIMEZONE` (default America/New_York), independent of the browser.
+- Settings are stored server-side (`settings` table); the theme preference is per-browser.

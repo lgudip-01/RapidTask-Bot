@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createApp, type AppDeps } from '../src/app';
 import { createDb, type Db } from '../src/db/client';
 import { FakeSource, type FixturePage } from '../src/sync/fake-source';
+import { SettingsStore } from '../src/settings';
 import { SyncScheduler } from '../src/sync/scheduler';
 import type { SyncSource } from '../src/sync/types';
 
@@ -25,8 +26,11 @@ export function makeTestEnv(
   sources: SyncSource[],
   startAt = '2026-10-09T16:00:00.000Z',
   extra:
-    | Partial<Pick<AppDeps, 'calendar' | 'inbound'>>
-    | ((db: Db, now: () => Date) => Partial<Pick<AppDeps, 'calendar' | 'inbound'>>) = {},
+    | Partial<Pick<AppDeps, 'calendar' | 'inbound' | 'capture'>>
+    | ((
+        db: Db,
+        now: () => Date,
+      ) => Partial<Pick<AppDeps, 'calendar' | 'inbound' | 'capture'>>) = {},
 ) {
   let nowMs = Date.parse(startAt);
   const timers: { fn: () => void; ms: number }[] = [];
@@ -42,6 +46,8 @@ export function makeTestEnv(
     db,
     scheduler,
     now,
+    timeZone: 'America/New_York',
+    settings: new SettingsStore(db, now),
     ...(typeof extra === 'function' ? extra(db, now) : extra),
   });
   return {

@@ -227,3 +227,62 @@ export const AnnouncementSchema = z.object({
   syncedAt: IsoDateTime,
 });
 export type Announcement = z.infer<typeof AnnouncementSchema>;
+
+export const SettingsSchema = z.object({
+  /** Use Claude for messages the fast parser can't handle. */
+  aiTriage: z.boolean(),
+  /** Show current Canvas grades in the UI. */
+  showGrades: z.boolean(),
+});
+export type Settings = z.infer<typeof SettingsSchema>;
+export const DEFAULT_SETTINGS: Settings = { aiTriage: true, showGrades: false };
+export const SettingsPatchSchema = SettingsSchema.partial().strict();
+
+/** Result of parsing free text (quick-add preview or capture). Times are ISO instants. */
+export const ParsePreviewSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('capture'),
+    kind: z.enum(['task', 'event']),
+    title: z.string(),
+    start: IsoDateTime.nullable(),
+    end: IsoDateTime.nullable(),
+    due: IsoDateTime.nullable(),
+    allDay: z.boolean(),
+    via: z.enum(['fast', 'llm']),
+    summary: z.string(),
+  }),
+  z.object({ type: z.literal('clarify'), question: z.string() }),
+  z.object({ type: z.literal('off_topic') }),
+  z.object({ type: z.literal('error'), reason: z.string(), message: z.string() }),
+]);
+export type ParsePreview = z.infer<typeof ParsePreviewSchema>;
+
+export const CaptureRequestSchema = z.object({
+  text: z.string().trim().min(1).max(500),
+  /** Preview only: false skips the model (no cost while typing). */
+  llm: z.boolean().optional(),
+});
+
+/** Accepting a suggestion: the (possibly edited) item to create. */
+export const AcceptSuggestionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('task'),
+    title: Title,
+    due: IsoDateTime.nullable(),
+    dueAllDay: z.boolean(),
+  }),
+  z.object({ kind: z.literal('event'), title: Title, when: EventTimesSchema }),
+]);
+export type AcceptSuggestion = z.input<typeof AcceptSuggestionSchema>;
+
+export const IntegrationStatusSchema = z.object({
+  id: z.enum(['google_calendar', 'google_tasks', 'canvas', 'telegram', 'twilio', 'parser']),
+  label: z.string(),
+  configured: z.boolean(),
+  /** e.g. "keyring", "rest", "ics", "polling", "webhook", model id */
+  detail: z.string().nullable(),
+  connected: z.boolean().nullable(),
+  sync: SyncStatusSchema.nullable(),
+  help: z.string().nullable(),
+});
+export type IntegrationStatus = z.infer<typeof IntegrationStatusSchema>;

@@ -168,3 +168,10 @@ export const captures = sqliteTable(
 
 export type InboundMessageRow = typeof inboundMessages.$inferSelect;
 export type CaptureRow = typeof captures.$inferSelect;
+
+/** App settings as JSON values (single user). */
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+});
