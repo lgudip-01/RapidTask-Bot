@@ -39,6 +39,13 @@ const EnvSchema = z.object({
   CANVAS_LOOKBACK_DAYS: z.coerce.number().int().nonnegative().default(30),
   CANVAS_LOOKAHEAD_DAYS: z.coerce.number().int().positive().default(120),
   CANVAS_SYNC_GRADES: z.stringbool().default(true),
+
+  // Message parser (Claude). Without a key only the deterministic fast path runs.
+  ANTHROPIC_API_KEY: optionalString,
+  PARSER_LLM_ENABLED: z.stringbool().default(true),
+  PARSER_MODEL: z.string().default('claude-opus-5-5'),
+  PARSER_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
+  PARSER_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

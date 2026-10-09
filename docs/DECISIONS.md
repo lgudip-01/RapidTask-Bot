@@ -125,3 +125,31 @@ Newest at the bottom. Each entry: context → decision → consequences.
   only. Course grades → `courses` table; `GET /api/courses` omits them unless `includeGrades=true`.
 - Fallback when tokens are disabled: the personal calendar feed (`CANVAS_ICS_URL`, a secret URL).
   Assignments → tasks with the same `assignment-<id>` ids (status unknown → todo).
+
+## 012 — Message parser (2026-10-09)
+
+- **Output contract:** `ParsedMessageSchema` (packages/shared) with kinds `event | task |
+  needs_clarification | off_topic`. `off_topic` was added beyond the original brief so irrelevant or
+  instruction-like messages are rejected explicitly instead of being forced into a task. Every
+  model response is re-validated with zod (strict, cross-field rules); anything else is rejected.
+- **Wall-clock, not UTC, from the model:** the model returns local `YYYY-MM-DD` /
+  `YYYY-MM-DDTHH:mm`; the server converts with `zonedTimeToUtc` (DST gaps resolve forward,
+  overlaps to the first occurrence). The user turn includes a 21-day date table so the model looks
+  dates up instead of computing weekday arithmetic.
+- **Fast path first:** chrono-node on the local wall clock (as a zone-free instant) for obvious
+  one-liners; it declines on anything ambiguous (recurrence, `?`, week/month phrases, bare hours
+  without am/pm, today's weekday name, leftover date words in the title).
+- **Claude call:** `claude-opus-5-5` (env `PARSER_MODEL`), structured outputs via
+  `output_config.format` (JSON schema), effort `low` by default (short, latency-sensitive
+  extraction; raise via `PARSER_EFFORT`), static system prompt with `cache_control` (it may be below
+  the minimum cacheable size; harmless), 20 s timeout, 2 SDK retries. `fallbacks: "default"` (beta
+  `server-side-fallback-2026-07-01`) is on so a false-positive safety decline retries on another
+  model instead of failing the message. Refusal/truncation/non-JSON → error outcomes.
+- **Untrusted text:** wrapped in `<message>` with our delimiter tags stripped from it; the system
+  prompt says it is data. Even a fully hijacked model can only emit the schema, and the pipeline
+  only ever creates one item (or asks one ≤160-char question to the owner).
+- **Clarification:** a pending question is held per sender **in memory only** for 10 minutes
+  (raw text is never persisted); the next message is sent with that context; max 2 rounds; low
+  confidence (< 0.5) is treated as needing clarification.
+- **Validation guards:** dates must fall between yesterday and +2 years; inverted ends are repaired
+  (all-day → +1 day exclusive; "11pm–1am" → next day; otherwise +60 min).
