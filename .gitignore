@@ -10,3 +10,4 @@ data/
 *.db-*
 .secrets/
 .DS_Store
+backups/

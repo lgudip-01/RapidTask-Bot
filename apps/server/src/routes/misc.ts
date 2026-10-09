@@ -70,6 +70,7 @@ export function miscRoutes(deps: AppDeps) {
       return c.json({ items });
     })
 
+    .get('/me', (c) => c.json({ authMode: deps.security?.auth.mode ?? 'none' }))
     .get('/status', async (c) =>
       c.json<{ integrations: IntegrationStatus[] }>({
         integrations: deps.integrations ? await deps.integrations() : [],

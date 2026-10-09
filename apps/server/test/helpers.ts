@@ -26,11 +26,13 @@ export function makeTestEnv(
   sources: SyncSource[],
   startAt = '2026-10-09T16:00:00.000Z',
   extra:
-    | Partial<Pick<AppDeps, 'calendar' | 'inbound' | 'capture'>>
+    | Partial<Pick<AppDeps, 'calendar' | 'inbound' | 'capture' | 'security' | 'webDist'>>
     | ((
         db: Db,
         now: () => Date,
-      ) => Partial<Pick<AppDeps, 'calendar' | 'inbound' | 'capture'>>) = {},
+      ) => Partial<
+        Pick<AppDeps, 'calendar' | 'inbound' | 'capture' | 'security' | 'webDist'>
+      >) = {},
 ) {
   let nowMs = Date.parse(startAt);
   const timers: { fn: () => void; ms: number }[] = [];

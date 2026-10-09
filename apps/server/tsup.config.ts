@@ -1,7 +1,11 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    backup: 'src/dev/backup.ts',
+    'hash-password': 'src/security/hash-password-cli.ts',
+  },
   format: ['esm'],
   target: 'node22',
   platform: 'node',

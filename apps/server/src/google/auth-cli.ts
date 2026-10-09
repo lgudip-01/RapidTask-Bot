@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { loadEnv } from '../env';
+import { sanitizeError } from '../log';
 import { createTokenStore } from '../secrets/token-store';
 import {
   buildAuthUrl,
@@ -134,6 +135,6 @@ async function main() {
 }
 
 main().catch((e: Error) => {
-  console.error(`auth:google failed: ${e.message}`);
+  console.error(`auth:google failed: ${sanitizeError(e)}`);
   process.exit(1);
 });

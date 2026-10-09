@@ -12,14 +12,25 @@ import { GoogleTasksClient } from './google/tasks-client';
 import { ItemCreator } from './inbound/creator';
 import { createInbound } from './inbound/setup';
 import { integrationStatus } from './integrations';
-import { log } from './log';
+import { log, sanitizeError } from './log';
 import { createClaudeExtractor } from './parser/claude-extractor';
 import { MessageParser } from './parser/parser';
 import type { CalendarWriter } from './routes/calendar';
 import { createTokenStore, type TokenStore } from './secrets/token-store';
+import { cloudflareAccessVerifier } from './security/auth';
+import type { SecurityConfig } from './security/middleware';
 import { SettingsStore } from './settings';
 import { SyncScheduler } from './sync/scheduler';
 import type { SyncSource } from './sync/types';
+
+// Never let a crash print an unsanitized error (which could carry a token or message text).
+process.on('uncaughtException', (e) => {
+  log.error('uncaught exception', { error: sanitizeError(e) });
+  process.exit(1);
+});
+process.on('unhandledRejection', (e) => {
+  log.error('unhandled rejection', { error: sanitizeError(e) });
+});
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_PATH);
@@ -109,6 +120,30 @@ async function disconnectGoogle(store: TokenStore) {
   await store.delete(REFRESH_TOKEN_KEY);
 }
 
+const security: SecurityConfig | undefined =
+  env.AUTH_MODE === 'none' && !env.PUBLIC_BASE_URL
+    ? undefined
+    : {
+        auth:
+          env.AUTH_MODE === 'password'
+            ? {
+                mode: 'password',
+                passwordHash: env.AUTH_PASSWORD_HASH!,
+                sessionSecret: env.SESSION_SECRET!,
+                sessionTtlMs: env.SESSION_TTL_DAYS * 86_400_000,
+              }
+            : env.AUTH_MODE === 'cloudflare'
+              ? {
+                  mode: 'cloudflare',
+                  verify: cloudflareAccessVerifier(env.CF_ACCESS_TEAM_DOMAIN!, env.CF_ACCESS_AUD!),
+                }
+              : { mode: 'none' },
+        publicOrigin: env.PUBLIC_BASE_URL ? new URL(env.PUBLIC_BASE_URL).origin : undefined,
+        trustProxy: env.TRUST_PROXY,
+        webhookRateLimitPerMin: env.WEBHOOK_RATE_LIMIT_PER_MIN,
+      };
+log.info('access control', { auth: env.AUTH_MODE, webUi: Boolean(env.WEB_DIST_DIR) });
+
 const scheduler = new SyncScheduler(db, sources);
 const inbound = createInbound(env, { db, now, parser, creator });
 const app = createApp({
@@ -122,6 +157,8 @@ const app = createApp({
   capture: { parser, creator },
   integrations: integrationStatus(env, { db, scheduler, tokenStore, llmAvailable: Boolean(llm) }),
   disconnectGoogle: tokenStore ? () => disconnectGoogle(tokenStore!) : undefined,
+  security,
+  webDist: env.WEB_DIST_DIR,
 });
 
 scheduler.start();

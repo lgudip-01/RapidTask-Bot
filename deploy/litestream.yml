@@ -1,0 +1,8 @@
+# Continuous SQLite replication to S3-compatible storage (e.g. Fly Tigris).
+# Credentials come from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in the environment
+# (`fly storage create` sets them as secrets).
+dbs:
+  - path: ${DATABASE_PATH}
+    replica:
+      # e.g. s3://planner-backups/planner.db?endpoint=fly.storage.tigris.dev&region=auto
+      url: ${LITESTREAM_REPLICA_URL}

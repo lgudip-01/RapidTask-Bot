@@ -29,6 +29,13 @@ async function request<T>(schema: z.ZodType<T>, url: string, init?: RequestInit)
     ...init,
     headers: { ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers },
   });
+  if (res.status === 401) {
+    // Session expired: back to the login page, then return here.
+    window.location.assign(
+      `/login?next=${encodeURIComponent(window.location.pathname + window.location.hash)}`,
+    );
+    throw new ApiError(401, 'Signed out');
+  }
   const text = await res.text();
   const json: unknown = text ? JSON.parse(text) : null;
   // 422 from /api/capture still carries a usable body.
@@ -106,6 +113,7 @@ export const api = {
   syncStatus: () => request(z.object({ sources: z.array(SyncStatusSchema) }), '/api/sync/status'),
   disconnectGoogle: () => request(z.null(), '/api/sources/google/disconnect', { method: 'POST' }),
 
+  me: () => request(z.object({ authMode: z.enum(['none', 'password', 'cloudflare']) }), '/api/me'),
   courses: (includeGrades: boolean) =>
     request(
       z.object({ courses: z.array(CourseSchema) }),

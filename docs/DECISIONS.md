@@ -198,3 +198,24 @@ needs_clarification | off_topic`. `off_topic` was added beyond the original brie
   runtime for both the web and inbound messages.
 - Rendering time zone: `VITE_APP_TIMEZONE` (default America/New_York), independent of the browser.
 - Settings are stored server-side (`settings` table); the theme preference is per-browser.
+
+## 015 — Deployment and hardening (2026-10-09)
+
+- **Fly.io**: one always-on `shared-cpu-1x` machine + a 1 GB volume for SQLite; Litestream
+  replicates continuously to Tigris and restores on a fresh volume. In-process scheduler (no
+  external cron) because the machine never sleeps. Container starts as root only to `chown` the
+  volume, then drops to `node` via `setpriv`.
+- **Access**: `AUTH_MODE=password` (scrypt N=2^15 hash, HMAC-signed stateless session cookie,
+  HttpOnly/Secure/SameSite=Lax, 5 logins/15 min/IP) or `cloudflare` (verify the Access JWT with
+  `jose` against the team JWKS). Public: `/webhooks/*` (signed, 60 req/min/IP), `/healthz`.
+  Production refuses to boot without auth, an https `PUBLIC_BASE_URL`, and a token-encryption key.
+- **Headers**: strict CSP (`script-src 'self'`; `style-src 'unsafe-inline'` only because Motion
+  animates via style attributes), HSTS, `X-Frame-Options: DENY`, nosniff, `Referrer-Policy:
+same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our own form posts,
+  which a real-browser test caught). CORS allows only the deployment origin; writes require a
+  matching Origin or `Sec-Fetch-Site: same-origin`.
+- **Logging audit**: every log call passes explicit non-sensitive fields; errors go through
+  `sanitizeError` (now also Basic auth, `sk-ant-…`, scrypt hashes); CLIs sanitize; process-level
+  `uncaughtException`/`unhandledRejection` handlers log sanitized messages only.
+- **Backups**: `npm run backup` (tasks → JSON); same script bundled as `dist/backup.js` for
+  `fly ssh console`.

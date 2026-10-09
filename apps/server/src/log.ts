@@ -28,6 +28,9 @@ export function sanitizeError(e: unknown): string {
       /([?&](?:access_token|refresh_token|token|key|secret|code|signature|client_secret)=)[^&\s]+/gi,
       '$1[redacted]',
     )
+    .replace(/(basic\s+)[A-Za-z0-9+/=]+/gi, '$1[redacted]')
+    .replace(/\bsk-ant-[\w-]+/g, '[redacted]')
+    .replace(/\bscrypt\$[^\s]+/g, '[redacted]')
     .replace(/\bya29\.[\w.-]+/g, '[redacted]')
     .replace(/\b1\/\/[\w.-]+/g, '[redacted]')
     .replace(/\b\d{6,}:[\w-]{30,}\b/g, '[redacted]')

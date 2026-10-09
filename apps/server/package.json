@@ -11,7 +11,9 @@
     "db:generate": "drizzle-kit generate",
     "auth:google": "tsx --env-file-if-exists=../../.env src/google/auth-cli.ts",
     "telegram": "tsx --env-file-if-exists=../../.env src/inbound/telegram-cli.ts",
-    "seed": "tsx src/dev/seed.ts"
+    "seed": "tsx src/dev/seed.ts",
+    "backup": "tsx --env-file-if-exists=../../.env src/dev/backup.ts",
+    "hash-password": "tsx src/security/hash-password-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
@@ -23,6 +25,7 @@
     "chrono-node": "^2.10.2",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",
+    "jose": "^6.2.12",
     "zod": "^4.6.5"
   },
   "devDependencies": {

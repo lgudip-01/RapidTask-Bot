@@ -17,7 +17,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "backup": "npm run backup -w @planner/server --",
+    "start": "npm run start -w @planner/server"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

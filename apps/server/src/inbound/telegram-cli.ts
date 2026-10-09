@@ -5,6 +5,7 @@
  *   npm run telegram -- info            show the current webhook registration
  */
 import { loadEnv } from '../env';
+import { sanitizeError } from '../log';
 import { TelegramApi } from './telegram';
 
 async function main() {
@@ -43,6 +44,6 @@ async function main() {
 
 main().catch((e: Error) => {
   // Telegram error text never contains the token; the request URL (which does) is never printed.
-  console.error(`telegram: ${e.message}`);
+  console.error(`telegram: ${sanitizeError(e)}`);
   process.exit(1);
 });

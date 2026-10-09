@@ -11,7 +11,9 @@ import {
   Sun,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { api } from '../lib/api';
 import { Button, cx, ErrorState, Kbd, LoadingRows, Segmented, Switch } from '../components/ui';
 import { applyTheme, readThemePref, type ThemePref } from '../lib/hooks';
 import {
@@ -127,6 +129,7 @@ export function SettingsView() {
   const showGrades = settings.data?.showGrades ?? false;
   const courses = useCourses(showGrades);
   const [theme, setTheme] = useState<ThemePref>(readThemePref);
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me });
 
   const sources =
     integrations.data?.filter((i) =>
@@ -249,6 +252,17 @@ export function SettingsView() {
           ]}
         />
       </Card>
+
+      {me.data?.authMode === 'password' && (
+        <Card title="Account">
+          <form method="post" action="/auth/logout" className="flex items-center justify-between">
+            <span className="text-sm text-muted">Signed in on this browser.</span>
+            <Button type="submit" size="sm" variant="subtle">
+              Sign out
+            </Button>
+          </form>
+        </Card>
+      )}
 
       <Card title="Keyboard shortcuts">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
