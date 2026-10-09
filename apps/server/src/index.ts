@@ -8,6 +8,8 @@ import { loadEnv } from './env';
 import { GoogleCalendarClient } from './google/calendar-client';
 import { GoogleCalendarSource } from './google/calendar-source';
 import { GoogleAuth } from './google/oauth';
+import { GoogleTasksClient } from './google/tasks-client';
+import { createInbound } from './inbound/setup';
 import { log } from './log';
 import type { CalendarWriter } from './routes/calendar';
 import { createTokenStore } from './secrets/token-store';
@@ -18,6 +20,7 @@ const env = loadEnv();
 const db = createDb(env.DATABASE_PATH);
 const sources: SyncSource[] = [];
 let calendar: CalendarWriter | undefined;
+let googleTasks: GoogleTasksClient | undefined;
 
 if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
   const store = await createTokenStore(env);
@@ -34,6 +37,7 @@ if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
       lookbackDays: env.GOOGLE_SYNC_LOOKBACK_DAYS,
     }),
   );
+  googleTasks = new GoogleTasksClient(auth);
   calendar = {
     client,
     defaultCalendarId: env.GOOGLE_CALENDAR_IDS[0] ?? 'primary',
@@ -68,10 +72,24 @@ if (env.CANVAS_BASE_URL && env.CANVAS_TOKEN) {
   log.info('canvas enabled', { mode: 'ics' });
 }
 
+const now = () => new Date();
 const scheduler = new SyncScheduler(db, sources);
-const app = createApp({ db, scheduler, now: () => new Date(), calendar });
+const inbound = createInbound(env, {
+  db,
+  now,
+  calendar: calendar && { client: calendar.client, calendarId: calendar.defaultCalendarId },
+  tasks: googleTasks,
+});
+const app = createApp({
+  db,
+  scheduler,
+  now,
+  calendar,
+  inbound: inbound ? { pipeline: inbound.pipeline, channels: inbound.channels } : undefined,
+});
 
 scheduler.start();
+inbound?.poller?.start();
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   log.info('server listening', { port: info.port, env: env.NODE_ENV, sources: sources.length });
 });
@@ -79,6 +97,7 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     scheduler.stop();
+    inbound?.poller?.stop();
     process.exit(0);
   });
 }

@@ -125,3 +125,46 @@ export type TaskRow = typeof tasks.$inferSelect;
 export type SyncStateRow = typeof syncState.$inferSelect;
 export type CourseRow = typeof courses.$inferSelect;
 export type AnnouncementRow = typeof announcements.$inferSelect;
+
+/**
+ * One row per inbound message: dedupe key plus a short audit trail.
+ * Never stores the message text (only its length and what we did with it).
+ */
+export const inboundMessages = sqliteTable(
+  'inbound_messages',
+  {
+    id: text('id').primaryKey(),
+    channel: text('channel').notNull(),
+    providerMessageId: text('provider_message_id').notNull(),
+    receivedAt: ts('received_at').notNull(),
+    textLength: integer('text_length').notNull(),
+    /** e.g. created_task, created_event, clarify, off_topic, command_undo, rate_limited, error_* */
+    outcome: text('outcome').notNull().default('pending'),
+    via: text('via'),
+    processedAt: ts('processed_at'),
+  },
+  (t) => [uniqueIndex('inbound_channel_msg_uq').on(t.channel, t.providerMessageId)],
+);
+
+/** Items created from messages, so UNDO can remove the latest one. */
+export const captures = sqliteTable(
+  'captures',
+  {
+    id: text('id').primaryKey(),
+    inboundId: text('inbound_id')
+      .notNull()
+      .references(() => inboundMessages.id),
+    kind: text('kind', { enum: ['task', 'event'] }).notNull(),
+    source: text('source', { enum: SOURCES }).notNull(),
+    /** Our row id in tasks / calendar_events. */
+    itemId: text('item_id').notNull(),
+    externalId: text('external_id').notNull(),
+    title: text('title').notNull(),
+    createdAt: ts('created_at').notNull(),
+    undoneAt: ts('undone_at'),
+  },
+  (t) => [index('captures_created_idx').on(t.createdAt)],
+);
+
+export type InboundMessageRow = typeof inboundMessages.$inferSelect;
+export type CaptureRow = typeof captures.$inferSelect;

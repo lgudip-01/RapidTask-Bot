@@ -195,6 +195,8 @@ describe('clarification flow', () => {
     expect(await parser.parse('owner', 'meeting')).toEqual({
       type: 'clarify',
       question: 'When is the meeting?',
+      proposedTitle: 'Meeting',
+      confidence: 0.6,
     });
     expect(parser.hasPending('owner')).toBe(true);
     expect(parser.hasPending('someone-else')).toBe(false);

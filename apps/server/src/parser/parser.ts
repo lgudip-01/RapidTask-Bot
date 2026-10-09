@@ -12,7 +12,7 @@ const LOW_CONFIDENCE_QUESTION = "I'm not sure I got that. What should I add, and
 
 export type ParseOutcome =
   | { type: 'capture'; item: ResolvedCapture; confidence: number; via: 'fast' | 'llm' }
-  | { type: 'clarify'; question: string }
+  | { type: 'clarify'; question: string; proposedTitle: string | null; confidence: number }
   | { type: 'off_topic' }
   | {
       type: 'error';
@@ -126,7 +126,7 @@ export class MessageParser {
         rounds,
         expiresAt: now.getTime() + CLARIFICATION_TTL_MS,
       });
-      return { type: 'clarify', question };
+      return { type: 'clarify', question, proposedTitle: p.title, confidence: p.confidence };
     }
 
     this.pending.delete(sender);

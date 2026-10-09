@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp, type AppDeps } from '../src/app';
-import { createDb } from '../src/db/client';
+import { createDb, type Db } from '../src/db/client';
 import { FakeSource, type FixturePage } from '../src/sync/fake-source';
 import { SyncScheduler } from '../src/sync/scheduler';
 import type { SyncSource } from '../src/sync/types';
@@ -24,7 +24,9 @@ export function fakeSource(pagesFixture: string, name = 'fake') {
 export function makeTestEnv(
   sources: SyncSource[],
   startAt = '2026-10-09T16:00:00.000Z',
-  extra: Partial<Pick<AppDeps, 'calendar'>> = {},
+  extra:
+    | Partial<Pick<AppDeps, 'calendar' | 'inbound'>>
+    | ((db: Db, now: () => Date) => Partial<Pick<AppDeps, 'calendar' | 'inbound'>>) = {},
 ) {
   let nowMs = Date.parse(startAt);
   const timers: { fn: () => void; ms: number }[] = [];
@@ -36,7 +38,12 @@ export function makeTestEnv(
     setTimer: (fn, ms) => timers.push({ fn, ms }),
     clearTimer: () => {},
   });
-  const app = createApp({ db, scheduler, now, ...extra });
+  const app = createApp({
+    db,
+    scheduler,
+    now,
+    ...(typeof extra === 'function' ? extra(db, now) : extra),
+  });
   return {
     db,
     scheduler,

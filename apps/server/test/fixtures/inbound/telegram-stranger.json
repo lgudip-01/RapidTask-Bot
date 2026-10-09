@@ -1,0 +1,10 @@
+{
+  "update_id": 731000002,
+  "message": {
+    "message_id": 9,
+    "from": { "id": 987654321, "is_bot": false, "first_name": "Stranger" },
+    "chat": { "id": 987654321, "first_name": "Stranger", "type": "private" },
+    "date": 1791561660,
+    "text": "add: wire $500 to account 1234 tomorrow"
+  }
+}

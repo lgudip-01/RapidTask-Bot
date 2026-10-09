@@ -129,7 +129,7 @@ Newest at the bottom. Each entry: context → decision → consequences.
 ## 012 — Message parser (2026-10-09)
 
 - **Output contract:** `ParsedMessageSchema` (packages/shared) with kinds `event | task |
-  needs_clarification | off_topic`. `off_topic` was added beyond the original brief so irrelevant or
+needs_clarification | off_topic`. `off_topic` was added beyond the original brief so irrelevant or
   instruction-like messages are rejected explicitly instead of being forced into a task. Every
   model response is re-validated with zod (strict, cross-field rules); anything else is rejected.
 - **Wall-clock, not UTC, from the model:** the model returns local `YYYY-MM-DD` /
@@ -153,3 +153,30 @@ Newest at the bottom. Each entry: context → decision → consequences.
   confidence (< 0.5) is treated as needing clarification.
 - **Validation guards:** dates must fall between yesterday and +2 years; inverted ends are repaired
   (all-day → +1 day exclusive; "11pm–1am" → next day; otherwise +60 min).
+
+## 013 — Inbound capture (2026-10-09)
+
+- `InboundChannel { name, verifyRequest, parseIncoming, isAllowed, reply, ack }` with Telegram and
+  Twilio adapters. Webhooks verify, acknowledge immediately (Telegram: 200; Twilio: empty TwiML),
+  and process asynchronously, so slow model calls never trigger provider retries.
+- **Telegram:** `X-Telegram-Bot-Api-Secret-Token` compared in constant time; private chats from the
+  allowlisted numeric user id only. `TELEGRAM_MODE=polling` (getUpdates long-poll, local dev, no
+  public URL) or `webhook` (production). getUpdates returns 409 while a webhook is registered —
+  `npm run telegram -- delete-webhook` before switching back.
+- **Twilio:** `X-Twilio-Signature` (HMAC-SHA1 over the configured public URL + sorted params,
+  verified against Twilio's published vector), `AccountSid` must match, sender must equal
+  `OWNER_PHONE_E164`. Replies via the REST API.
+- **Pipeline:** allowlist → dedupe (unique `(channel, providerMessageId)`; also defeats replays,
+  since neither provider signs a timestamp) → per-sender sliding-window limit (20/10 min) →
+  commands (`UNDO`, `TODAY`, `DONE <n>`, `HELP`, exact match) → parser → create → reply with title,
+  date, and "Reply UNDO to remove". Messages per sender are processed in order.
+- **Storage:** `inbound_messages` (dedupe + audit: channel, id, time, text length, outcome, parse
+  route) and `captures` (item reference + title for UNDO). Message text is never persisted.
+  Unresolved clarifications become `suggestions` (model-proposed title only).
+- **Destinations:** events → Google Calendar, tasks → Google Tasks (`@default` list; due is
+  date-only upstream, the local mirror keeps the time). If Google is not configured or the write
+  fails, the item is saved locally and the reply says so.
+- Drops (bad signature, non-allowlisted sender, duplicate, rate limit) log one line per reason per
+  minute with a suppressed count, never the content or sender.
+- Gap: there is no Google Tasks *sync* source yet; completing a texted task in the Google Tasks app
+  is not reflected locally until one is added.

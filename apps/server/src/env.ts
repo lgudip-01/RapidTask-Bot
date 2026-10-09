@@ -46,6 +46,34 @@ const EnvSchema = z.object({
   PARSER_MODEL: z.string().default('claude-opus-5-5'),
   PARSER_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
   PARSER_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+
+  // Public HTTPS origin of this server (webhook registration, Twilio signature URL).
+  PUBLIC_BASE_URL: optionalString.pipe(z.url().optional()),
+  INBOUND_RATE_LIMIT_PER_10_MIN: z.coerce.number().int().positive().default(20),
+
+  // Telegram bot. polling = local dev (no public URL); webhook = production.
+  TELEGRAM_BOT_TOKEN: optionalString,
+  TELEGRAM_ALLOWED_USER_ID: optionalString.pipe(z.string().regex(/^\d+$/).optional()),
+  TELEGRAM_MODE: z.enum(['polling', 'webhook']).default('polling'),
+  TELEGRAM_WEBHOOK_SECRET: optionalString.pipe(
+    z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{16,256}$/)
+      .optional(),
+  ),
+
+  // Twilio SMS.
+  TWILIO_ACCOUNT_SID: optionalString,
+  TWILIO_AUTH_TOKEN: optionalString,
+  TWILIO_FROM_NUMBER: optionalString,
+  OWNER_PHONE_E164: optionalString.pipe(
+    z
+      .string()
+      .regex(/^\+[1-9]\d{6,14}$/)
+      .optional(),
+  ),
+  /** Override when the public URL Twilio calls differs from PUBLIC_BASE_URL + /webhooks/twilio. */
+  TWILIO_WEBHOOK_URL: optionalString.pipe(z.url().optional()),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
