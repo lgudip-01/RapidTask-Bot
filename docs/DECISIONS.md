@@ -233,3 +233,15 @@ same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our 
   `status`/`sortOrder` override (check-off), which is stored only in Planner.
 - After revoking the old grant, re-authorize with `npm run auth:google`; see
   `docs/SETUP-GOOGLE.md`.
+
+## 017 — WRITE_EVENTS_TO_GOOGLE is reserved, not implemented (2026-10-10)
+
+- `WRITE_EVENTS_TO_GOOGLE` (default `false`) names a possible future option: copy events
+  created in Planner (texted or added in the UI) to Google Calendar. It is **not implemented**.
+  Nothing reads it except a startup warning when it is `true` and the read-only switch in Settings.
+- Building it would need:
+  - the `calendar.events` scope (a new consent);
+  - a write client with explicit confirmation;
+  - mapping local events to Google event ids so edits and deletes follow;
+  - a decision about which copy wins on conflict.
+    Until then, the read-only guard tests forbid any such code.

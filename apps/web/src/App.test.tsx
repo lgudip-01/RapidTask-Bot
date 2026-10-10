@@ -145,3 +145,21 @@ describe('quick add', () => {
     expect(await screen.findByText('Added task: Physics lab report')).toBeTruthy();
   });
 });
+
+describe('Settings', () => {
+  it('shows Google write-back as off and impossible to turn on', async () => {
+    const api = renderApp({
+      'GET /api/me': () => ({ authMode: 'none', writeEventsToGoogle: true }),
+    });
+    window.location.hash = '#/settings';
+    const toggle = await screen.findByRole('switch', {
+      name: 'Copy texted events to Google Calendar',
+    });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect((toggle as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByText(/WRITE_EVENTS_TO_GOOGLE=true, which is ignored/)).toBeTruthy();
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(api.calls.filter((c) => c.method !== 'GET')).toEqual([]);
+  });
+});

@@ -179,6 +179,24 @@ export function SettingsView() {
             onChange={(v) => patch.mutate({ aiTriage: v })}
           />
           <Switch
+            label="Copy texted events to Google Calendar"
+            description={
+              <>
+                Off, and not available yet. Planner only <b>reads</b> your Google Calendar: events
+                you text or add here are saved in Planner only. Writing them to Google is a possible
+                future option (<code>WRITE_EVENTS_TO_GOOGLE</code>) that has not been built.
+                {me.data?.writeEventsToGoogle && (
+                  <span className="mt-1 block text-warn">
+                    The server has WRITE_EVENTS_TO_GOOGLE=true, which is ignored.
+                  </span>
+                )}
+              </>
+            }
+            checked={false}
+            disabled
+            onChange={() => {}}
+          />
+          <Switch
             label="Show Canvas grades"
             description="Current grade per course. Hidden by default."
             checked={showGrades}

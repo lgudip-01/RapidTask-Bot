@@ -113,7 +113,14 @@ export const api = {
   syncStatus: () => request(z.object({ sources: z.array(SyncStatusSchema) }), '/api/sync/status'),
   disconnectGoogle: () => request(z.null(), '/api/sources/google/disconnect', { method: 'POST' }),
 
-  me: () => request(z.object({ authMode: z.enum(['none', 'password', 'cloudflare']) }), '/api/me'),
+  me: () =>
+    request(
+      z.object({
+        authMode: z.enum(['none', 'password', 'cloudflare']),
+        writeEventsToGoogle: z.boolean().default(false),
+      }),
+      '/api/me',
+    ),
   courses: (includeGrades: boolean) =>
     request(
       z.object({ courses: z.array(CourseSchema) }),
