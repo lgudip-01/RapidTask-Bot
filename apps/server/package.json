@@ -12,7 +12,8 @@
     "auth:google": "tsx --env-file-if-exists=../../.env src/google/auth-cli.ts",
     "telegram": "tsx --env-file-if-exists=../../.env src/inbound/telegram-cli.ts",
     "seed": "tsx src/dev/seed.ts",
-    "backup": "tsx --env-file-if-exists=../../.env src/dev/backup.ts",
+    "backup": "tsx --env-file-if-exists=../../.env src/backup/backup-cli.ts",
+    "restore": "tsx --env-file-if-exists=../../.env src/backup/restore-cli.ts",
     "hash-password": "tsx src/security/hash-password-cli.ts"
   },
   "dependencies": {

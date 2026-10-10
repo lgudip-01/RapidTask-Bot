@@ -352,7 +352,7 @@ export const TasksView = forwardRef<HTMLInputElement>(function TasksView(_props,
           onChange={(v) => setSource(v as typeof source)}
           options={[
             { value: 'all', label: 'All' },
-            ...(['google_tasks', 'canvas', 'local'] as Source[]).map((s) => ({
+            ...(['canvas', 'local'] as Source[]).map((s) => ({
               value: s,
               label: SOURCE_META[s].label,
             })),

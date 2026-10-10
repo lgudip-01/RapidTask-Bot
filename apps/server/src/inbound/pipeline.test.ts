@@ -120,7 +120,7 @@ describe('capture pipeline', () => {
     });
 
     expect(await h.say('tues 2pm')).toBe(
-      'Added to calendar: Meeting — Tue, Oct 13, 2:00–3:00 PM. Reply UNDO to remove.',
+      'Added event: Meeting — Tue, Oct 13, 2:00–3:00 PM. Reply UNDO to remove.',
     );
     expect(h.db.select().from(suggestions).get()).toMatchObject({ status: 'accepted' });
   });
@@ -167,75 +167,46 @@ describe('capture pipeline', () => {
   });
 });
 
-describe('Google routing', () => {
-  const googleEvent = (body: Record<string, unknown>) => ({
-    id: 'gev1',
-    status: 'confirmed',
-    updated: '2026-10-09T16:00:00.000Z',
-    summary: body.summary,
-    start: body.start,
-    end: body.end,
-  });
-
-  it('sends events to Google Calendar and tasks to Google Tasks; UNDO deletes upstream', async () => {
-    const h = inboundHarness({
-      google: {
-        calendar: (req) =>
-          req.method === 'DELETE'
-            ? { status: 204 }
-            : { status: 200, json: googleEvent(req.body as Record<string, unknown>) },
-        tasks: (req) =>
-          req.method === 'DELETE'
-            ? { status: 204 }
-            : {
-                status: 200,
-                json: {
-                  id: 'gt1',
-                  title: (req.body as { title: string }).title,
-                  status: 'needsAction',
-                  updated: '2026-10-09T16:00:00.000Z',
-                },
-              },
-      },
-    });
-
-    expect(await h.say('dentist tues 3pm')).toContain('Added to calendar: Dentist');
-    expect(h.googleCalendarApi!.calls[0]).toMatchObject({ method: 'POST' });
-    expect(h.googleCalendarApi!.calls[0]!.body).toMatchObject({
-      summary: 'Dentist',
-      start: { dateTime: '2026-10-13T19:00:00.000Z', timeZone: 'America/New_York' },
-    });
+describe('local-first capture', () => {
+  it('stores texted events and tasks only in Planner, and UNDO removes them', async () => {
+    const h = inboundHarness();
+    expect(await h.say('dentist tues 3pm')).toBe(
+      'Added event: Dentist — Tue, Oct 13, 3:00–4:00 PM. Reply UNDO to remove.',
+    );
     expect(h.db.select().from(calendarEvents).get()).toMatchObject({
-      source: 'google_calendar',
-      externalId: 'primary/gev1',
+      source: 'local',
+      title: 'Dentist',
     });
+    expect(await h.say('call mom tomorrow')).toBe(
+      'Added task: Call mom — due Sat, Oct 10. Reply UNDO to remove.',
+    );
+    expect(h.db.select().from(tasks).get()).toMatchObject({ source: 'local', status: 'todo' });
 
-    expect(await h.say('call mom tomorrow')).toContain('Added task: Call mom');
-    expect(h.googleTasksApi!.calls[0]!.url.pathname).toBe('/tasks/v1/lists/%40default/tasks');
-    expect(h.googleTasksApi!.calls[0]!.body).toEqual({
-      title: 'Call mom',
-      due: '2026-10-10T00:00:00.000Z',
-    });
-    expect(h.db.select().from(tasks).get()).toMatchObject({
-      source: 'google_tasks',
-      externalId: '@default/gt1',
-    });
-
-    expect(await h.say('UNDO')).toBe('Removed: Call mom');
-    expect(h.googleTasksApi!.calls.at(-1)).toMatchObject({ method: 'DELETE' });
+    expect(await h.say('/undo')).toBe('Removed: Call mom');
+    expect(await h.say('UNDO')).toBe('Removed: Dentist');
+    expect(h.db.select().from(calendarEvents).all()).toHaveLength(0);
     expect(h.db.select().from(tasks).all()).toHaveLength(0);
   });
 
-  it('falls back to local storage when Google fails, and says so', async () => {
-    const h = inboundHarness({
-      google: {
-        calendar: () => ({ status: 503, json: {} }),
-        tasks: () => ({ status: 503, json: {} }),
-      },
-    });
-    expect(await h.say('dentist tues 3pm')).toBe(
-      'Added to calendar: Dentist — Tue, Oct 13, 3:00–4:00 PM (saved in Planner; Google Calendar was unavailable). Reply UNDO to remove.',
-    );
-    expect(h.db.select().from(calendarEvents).get()).toMatchObject({ source: 'local' });
+  it('texted tasks can be completed from the UI or with /done', async () => {
+    const h = inboundHarness();
+    await h.say('call mom tomorrow');
+    const task = h.db.select().from(tasks).get()!;
+    const done = await h.json('PATCH', `/api/tasks/${task.id}`, { status: 'done' });
+    expect(done.body.task).toMatchObject({ status: 'done', statusSetLocally: false });
+
+    await h.say('submit form by 5pm');
+    expect(await h.say('/today')).toContain('1. Submit form — due 5:00 PM');
+    expect(await h.say('/done 1')).toBe('Done: Submit form ✓');
+  });
+
+  it('notifies the UI when a message changes data', async () => {
+    const topics: string[] = [];
+    const h = inboundHarness({ onChange: (t) => topics.push(t) });
+    await h.say('HELP');
+    expect(topics).toEqual([]);
+    await h.say('dentist tues 3pm');
+    await h.say('/undo');
+    expect(topics).toEqual(['items', 'items']);
   });
 });

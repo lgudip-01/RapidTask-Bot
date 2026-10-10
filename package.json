@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "backup": "npm run backup -w @planner/server --",
+    "restore": "npm run restore -w @planner/server --",
     "start": "npm run start -w @planner/server"
   },
   "devDependencies": {

@@ -5,7 +5,6 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 export const SOURCE_META: Record<Source, { label: string; short: string }> = {
   google_calendar: { label: 'Google Calendar', short: 'GCal' },
-  google_tasks: { label: 'Google Tasks', short: 'Tasks' },
   canvas: { label: 'Canvas', short: 'Canvas' },
   local: { label: 'Planner', short: 'Local' },
 };
@@ -31,9 +30,7 @@ export function SourceBadge({ source, compact = false }: { source: Source; compa
   );
 }
 
-export function Legend({
-  sources = ['google_calendar', 'google_tasks', 'canvas', 'local'] as Source[],
-}) {
+export function Legend({ sources = ['google_calendar', 'canvas', 'local'] as Source[] }) {
   return (
     <ul className="flex flex-wrap items-center gap-3" aria-label="Source colors">
       {sources.map((s) => (

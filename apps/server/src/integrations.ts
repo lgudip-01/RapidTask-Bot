@@ -56,15 +56,6 @@ export function integrationStatus(
             : null,
       },
       {
-        id: 'google_tasks',
-        label: 'Google Tasks',
-        configured: googleConfigured,
-        detail: googleConfigured ? 'write (texted tasks)' : null,
-        connected: googleConnected,
-        sync: null,
-        help: null,
-      },
-      {
         id: 'canvas',
         label: 'Canvas',
         configured: canvasMode !== null,

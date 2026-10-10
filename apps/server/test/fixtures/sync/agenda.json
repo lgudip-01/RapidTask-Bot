@@ -88,7 +88,7 @@
       {
         "kind": "task",
         "data": {
-          "source": "google_tasks",
+          "source": "canvas",
           "externalId": "t-call",
           "title": "Call landlord",
           "due": "2026-10-09T04:00:00.000Z",
@@ -100,7 +100,7 @@
       {
         "kind": "task",
         "data": {
-          "source": "google_tasks",
+          "source": "canvas",
           "externalId": "t-morning",
           "title": "Submit form by 10am",
           "due": "2026-10-09T14:00:00.000Z",
@@ -136,7 +136,7 @@
       {
         "kind": "task",
         "data": {
-          "source": "google_tasks",
+          "source": "canvas",
           "externalId": "t-nodate",
           "title": "Buy shelf",
           "dueAllDay": true,

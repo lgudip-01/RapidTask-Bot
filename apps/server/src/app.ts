@@ -3,8 +3,11 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { BackupService } from './backup/backup';
+import type { ChangeBus } from './changes';
 import type { Db } from './db/client';
 import type { ItemCreator } from './inbound/creator';
 import type { InboundPipeline } from './inbound/pipeline';
@@ -13,9 +16,10 @@ import { log, sanitizeError } from './log';
 import type { MessageParser } from './parser/parser';
 import { agendaRoutes } from './routes/agenda';
 import { authRoutes } from './routes/auth';
-import { calendarRoutes, type CalendarWriter } from './routes/calendar';
+import { backupRoutes } from './routes/backups';
 import { canvasRoutes } from './routes/canvas';
 import { captureRoutes } from './routes/capture';
+import { eventRoutes } from './routes/events';
 import { miscRoutes } from './routes/misc';
 import { suggestionRoutes } from './routes/suggestions';
 import { syncRoutes } from './routes/sync';
@@ -38,8 +42,11 @@ export interface AppDeps {
   now: () => Date;
   timeZone: string;
   settings: SettingsStore;
-  /** Present when Google is configured; calendar write routes answer 503 otherwise. */
-  calendar?: CalendarWriter;
+  /** Notifies open web UIs that data changed (Server-Sent Events). */
+  changes?: ChangeBus;
+  backups?: BackupService;
+  /** Reported to the UI; the write path is not implemented (Google is read-only). */
+  writeEventsToGoogle?: boolean;
   /** Present when at least one messaging channel is configured. */
   inbound?: {
     pipeline: InboundPipeline;
@@ -84,6 +91,29 @@ export function createApp(deps: AppDeps) {
     app.route('/', authRoutes(sec));
   }
 
+  // Any successful write through the API means open UIs should refresh.
+  app.use('/api/*', async (c, next) => {
+    await next();
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD' && c.res.status < 400) {
+      deps.changes?.emit(c.req.path.startsWith('/api/suggestions') ? 'suggestions' : 'items');
+    }
+  });
+
+  /** Live "something changed" notifications for the web UI. Carries no item content. */
+  app.get('/api/stream', (c) =>
+    streamSSE(c, async (stream) => {
+      const off = deps.changes?.subscribe((e) => {
+        void stream.writeSSE({ event: 'change', id: String(e.seq), data: JSON.stringify(e) });
+      });
+      stream.onAbort(() => off?.());
+      while (!stream.aborted && !stream.closed) {
+        await stream.writeSSE({ event: 'ping', data: '' });
+        await stream.sleep(25_000);
+      }
+      off?.();
+    }),
+  );
+
   /** Liveness + database check for the platform health check (no auth, no details). */
   app.get('/healthz', (c) => {
     try {
@@ -100,7 +130,8 @@ export function createApp(deps: AppDeps) {
   app.route('/api/agenda', agendaRoutes(deps));
   app.route('/api/tasks', taskRoutes(deps));
   app.route('/api/sync', syncRoutes(deps));
-  app.route('/api/calendar', calendarRoutes(deps));
+  app.route('/api/events', eventRoutes(deps));
+  app.route('/api/backups', backupRoutes(deps));
   app.route('/api/suggestions', suggestionRoutes(deps));
   app.route('/api', canvasRoutes(deps));
   app.route('/api', captureRoutes(deps));

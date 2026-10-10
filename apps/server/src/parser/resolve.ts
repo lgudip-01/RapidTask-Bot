@@ -19,7 +19,7 @@ export type ResolvedCapture =
       title: string;
       due: Date | null;
       dueAllDay: boolean;
-      /** Local due date ("YYYY-MM-DD"), for Google Tasks (date-only). */
+      /** Local due date ("YYYY-MM-DD"). */
       dueDate: string | null;
       notes: string | null;
     };

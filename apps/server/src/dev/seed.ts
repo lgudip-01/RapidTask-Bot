@@ -149,30 +149,6 @@ const items: SyncItem[] = [
     },
   },
   {
-    kind: 'task',
-    data: {
-      source: 'google_tasks',
-      externalId: '@default/seed-landlord',
-      title: 'Call landlord',
-      due: midnight(0),
-      dueAllDay: true,
-      status: 'todo',
-      updatedAt,
-    },
-  },
-  {
-    kind: 'task',
-    data: {
-      source: 'google_tasks',
-      externalId: '@default/seed-passport',
-      title: 'Renew passport',
-      due: midnight(4),
-      dueAllDay: true,
-      status: 'todo',
-      updatedAt,
-    },
-  },
-  {
     kind: 'course',
     data: {
       source: 'canvas',
@@ -240,6 +216,8 @@ db.insert(tasks)
     local('seed-local-3', 'Finish slides', at(3, 17), 'doing', 3, false),
     local('seed-local-4', 'Buy shelf', null, 'todo', 4),
     local('seed-local-5', 'Order textbook', midnight(-1), 'done', 5),
+    local('seed-local-6', 'Call landlord', midnight(0), 'todo', 6),
+    local('seed-local-7', 'Renew passport', midnight(4), 'todo', 7),
   ])
   .onConflictDoNothing()
   .run();

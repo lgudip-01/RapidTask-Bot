@@ -5,11 +5,8 @@ export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 
-/** Calendar events read/write + Google Tasks (used by inbound capture). Not full `calendar`. */
-export const GOOGLE_SCOPES = [
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/tasks',
-];
+/** Read-only calendar access. The app never writes to Google. */
+export const GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 
 export const REFRESH_TOKEN_KEY = 'google.refresh_token';
 

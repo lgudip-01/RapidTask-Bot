@@ -32,6 +32,8 @@ export interface InboundPipelineOptions {
   now: () => Date;
   /** Messages per sender per window. */
   rateLimit?: { limit: number; windowMs: number };
+  /** Called when a message changed data, so the web UI refreshes. */
+  onChange?: (topic: 'items' | 'suggestions') => void;
 }
 
 /**
@@ -136,6 +138,7 @@ export class InboundPipeline {
       this.o.parser.clearPending(sender);
       const text = await this.runCommand(command, sender);
       finish(`command_${command.type}`);
+      if (command.type === 'undo' || command.type === 'done') this.o.onChange?.('items');
       await reply(text);
       return;
     }
@@ -160,7 +163,8 @@ export class InboundPipeline {
           .run();
         this.resolveSuggestion(sender, 'accepted');
         finish(`created_${created.kind}`, out.via);
-        await reply(confirmationText(out.item, this.o.timeZone, created.fallbackNote));
+        this.o.onChange?.('items');
+        await reply(confirmationText(out.item, this.o.timeZone));
         return;
       }
       case 'clarify': {
@@ -179,6 +183,7 @@ export class InboundPipeline {
           this.pendingSuggestion.set(sender, id);
         }
         finish('clarify', 'llm');
+        if (out.proposedTitle) this.o.onChange?.('suggestions');
         await reply(plain(out.question));
         return;
       }

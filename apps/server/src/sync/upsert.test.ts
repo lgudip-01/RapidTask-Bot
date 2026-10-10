@@ -4,7 +4,7 @@ import { calendarEvents, syncState, tasks } from '../db/schema';
 import { nextDelay } from './scheduler';
 import { applySyncBatch, idsBySource } from './upsert';
 
-const ALL = ['google_calendar', 'canvas', 'google_tasks'] as const;
+const ALL = ['google_calendar', 'canvas'] as const;
 
 describe('sync upsert', () => {
   it('is idempotent: re-applying the same page keeps row count and ids, refreshes syncedAt', async () => {

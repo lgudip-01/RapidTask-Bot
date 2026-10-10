@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GoogleCalendarClient } from '../src/google/calendar-client';
-import { GoogleTasksClient } from '../src/google/tasks-client';
 import { ItemCreator } from '../src/inbound/creator';
 import { InboundPipeline } from '../src/inbound/pipeline';
 import {
@@ -14,7 +12,7 @@ import {
 import { TwilioChannel, TWILIO_SIGNATURE_HEADER, twilioSignature } from '../src/inbound/twilio';
 import type { LlmExtractor } from '../src/parser/claude-extractor';
 import { MessageParser } from '../src/parser/parser';
-import { fakeFetch, staticAuth, type FakeReply, type RecordedRequest } from './fake-fetch';
+import { fakeFetch } from './fake-fetch';
 import { loadFixture, makeTestEnv } from './helpers';
 
 export const NOW = '2026-10-09T16:00:00.000Z'; // Fri 12:00 EDT
@@ -48,11 +46,8 @@ export function ownerUpdate(text: string, updateId = nextUpdateId++) {
 
 export interface HarnessOptions {
   llm?: LlmExtractor | null;
-  /** Fake Google APIs; omit for local-only storage. */
-  google?: {
-    calendar: (req: RecordedRequest) => FakeReply;
-    tasks: (req: RecordedRequest) => FakeReply;
-  };
+  /** Receives the pipeline's change notifications. */
+  onChange?: (topic: 'items' | 'suggestions') => void;
   rateLimit?: { limit: number; windowMs: number };
 }
 
@@ -62,25 +57,12 @@ export function inboundHarness(opts: HarnessOptions = {}) {
     json: { ok: true, result: { message_id: 1 } },
   }));
   const twilioApi = fakeFetch(() => ({ status: 201, json: { sid: 'SMreply' } }));
-  const googleCalendarApi = opts.google ? fakeFetch(opts.google.calendar) : null;
-  const googleTasksApi = opts.google ? fakeFetch(opts.google.tasks) : null;
   let pipeline!: InboundPipeline;
   let parser!: MessageParser;
 
   const env = makeTestEnv([], NOW, (db, now) => {
     parser = new MessageParser({ llm: opts.llm ?? null, timeZone: TZ, now });
-    const creator = new ItemCreator({
-      db,
-      now,
-      timeZone: TZ,
-      calendar: googleCalendarApi
-        ? {
-            client: new GoogleCalendarClient(staticAuth(), googleCalendarApi),
-            calendarId: 'primary',
-          }
-        : undefined,
-      tasks: googleTasksApi ? new GoogleTasksClient(staticAuth(), googleTasksApi) : undefined,
-    });
+    const creator = new ItemCreator({ db, now });
     pipeline = new InboundPipeline({
       db,
       parser,
@@ -88,6 +70,7 @@ export function inboundHarness(opts: HarnessOptions = {}) {
       timeZone: TZ,
       now,
       rateLimit: opts.rateLimit,
+      onChange: opts.onChange,
     });
     const telegram = new TelegramChannel({
       api: new TelegramApi('123:test-bot-token', telegramApi),
@@ -145,8 +128,6 @@ export function inboundHarness(opts: HarnessOptions = {}) {
     },
     telegramApi,
     twilioApi,
-    googleCalendarApi,
-    googleTasksApi,
     postTelegram,
     postTwilio,
     signTwilio,

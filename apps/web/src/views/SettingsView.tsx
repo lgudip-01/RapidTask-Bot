@@ -28,7 +28,6 @@ import { relative } from '../lib/time';
 
 const ICONS: Record<IntegrationStatus['id'], ReactNode> = {
   google_calendar: <CalendarDays className="size-4" />,
-  google_tasks: <CalendarDays className="size-4" />,
   canvas: <GraduationCap className="size-4" />,
   telegram: <MessageCircle className="size-4" />,
   twilio: <Smartphone className="size-4" />,
@@ -132,9 +131,7 @@ export function SettingsView() {
   const me = useQuery({ queryKey: ['me'], queryFn: api.me });
 
   const sources =
-    integrations.data?.filter((i) =>
-      ['google_calendar', 'google_tasks', 'canvas'].includes(i.id),
-    ) ?? [];
+    integrations.data?.filter((i) => ['google_calendar', 'canvas'].includes(i.id)) ?? [];
   const inbound =
     integrations.data?.filter((i) => ['telegram', 'twilio', 'parser'].includes(i.id)) ?? [];
 

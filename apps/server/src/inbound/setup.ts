@@ -17,7 +17,13 @@ export interface InboundSetup {
 /** Builds whichever channels are fully configured. Returns null when none are. */
 export function createInbound(
   env: Env,
-  deps: { db: Db; now: () => Date; parser: MessageParser; creator: ItemCreator },
+  deps: {
+    db: Db;
+    now: () => Date;
+    parser: MessageParser;
+    creator: ItemCreator;
+    onChange?: (topic: 'items' | 'suggestions') => void;
+  },
 ): InboundSetup | null {
   const pipeline = new InboundPipeline({
     db: deps.db,
@@ -26,6 +32,7 @@ export function createInbound(
     timeZone: env.APP_TIMEZONE,
     now: deps.now,
     rateLimit: { limit: env.INBOUND_RATE_LIMIT_PER_10_MIN, windowMs: 10 * 60_000 },
+    onChange: deps.onChange,
   });
   const channels: InboundSetup['channels'] = {};
   let poller: TelegramPoller | null = null;

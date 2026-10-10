@@ -17,7 +17,7 @@ export function loadFixture<T = unknown>(rel: string): T {
 export function fakeSource(pagesFixture: string, name = 'fake') {
   return new FakeSource(name, loadFixture<FixturePage[]>(pagesFixture), {
     event: ['google_calendar'],
-    task: ['canvas', 'google_tasks'],
+    task: ['canvas'],
   });
 }
 
@@ -26,12 +26,12 @@ export function makeTestEnv(
   sources: SyncSource[],
   startAt = '2026-10-09T16:00:00.000Z',
   extra:
-    | Partial<Pick<AppDeps, 'calendar' | 'inbound' | 'capture' | 'security' | 'webDist'>>
+    | Partial<Pick<AppDeps, 'changes' | 'backups' | 'inbound' | 'capture' | 'security' | 'webDist'>>
     | ((
         db: Db,
         now: () => Date,
       ) => Partial<
-        Pick<AppDeps, 'calendar' | 'inbound' | 'capture' | 'security' | 'webDist'>
+        Pick<AppDeps, 'changes' | 'backups' | 'inbound' | 'capture' | 'security' | 'webDist'>
       >) = {},
 ) {
   let nowMs = Date.parse(startAt);

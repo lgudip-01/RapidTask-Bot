@@ -1,21 +1,22 @@
 import { serve } from '@hono/node-server';
 import { CanvasClient } from '@planner/canvas';
 import { createApp } from './app';
+import { BackupService } from './backup/backup';
 import { CanvasIcsSource } from './canvas/canvas-ics-source';
 import { CanvasSource } from './canvas/canvas-source';
+import { ChangeBus } from './changes';
 import { createDb } from './db/client';
 import { loadEnv } from './env';
 import { GoogleCalendarClient } from './google/calendar-client';
 import { GoogleCalendarSource } from './google/calendar-source';
 import { GOOGLE_REVOKE_URL, GoogleAuth, REFRESH_TOKEN_KEY } from './google/oauth';
-import { GoogleTasksClient } from './google/tasks-client';
 import { ItemCreator } from './inbound/creator';
 import { createInbound } from './inbound/setup';
+import { TelegramApi } from './inbound/telegram';
 import { integrationStatus } from './integrations';
 import { log, sanitizeError } from './log';
 import { createClaudeExtractor } from './parser/claude-extractor';
 import { MessageParser } from './parser/parser';
-import type { CalendarWriter } from './routes/calendar';
 import { createTokenStore, type TokenStore } from './secrets/token-store';
 import { cloudflareAccessVerifier } from './security/auth';
 import type { SecurityConfig } from './security/middleware';
@@ -37,8 +38,7 @@ const db = createDb(env.DATABASE_PATH);
 const now = () => new Date();
 const settings = new SettingsStore(db, now);
 const sources: SyncSource[] = [];
-let calendar: CalendarWriter | undefined;
-let googleTasks: GoogleTasksClient | undefined;
+const changes = new ChangeBus();
 let tokenStore: TokenStore | null = null;
 
 if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
@@ -56,13 +56,7 @@ if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
       lookbackDays: env.GOOGLE_SYNC_LOOKBACK_DAYS,
     }),
   );
-  googleTasks = new GoogleTasksClient(auth);
-  calendar = {
-    client,
-    defaultCalendarId: env.GOOGLE_CALENDAR_IDS[0] ?? 'primary',
-    appTimeZone: env.APP_TIMEZONE,
-  };
-  log.info('google enabled', { tokenStore: tokenStore.kind });
+  log.info('google calendar enabled (read-only)', { tokenStore: tokenStore.kind });
 } else {
   log.info('google disabled (GOOGLE_CLIENT_ID/SECRET not set)');
 }
@@ -99,13 +93,11 @@ const parser = new MessageParser({
   timeZone: env.APP_TIMEZONE,
   now,
 });
-const creator = new ItemCreator({
-  db,
-  now,
-  timeZone: env.APP_TIMEZONE,
-  calendar: calendar && { client: calendar.client, calendarId: calendar.defaultCalendarId },
-  tasks: googleTasks,
-});
+// Everything created from texts or the UI lives only in this app's database.
+const creator = new ItemCreator({ db, now });
+if (env.WRITE_EVENTS_TO_GOOGLE) {
+  log.warn('WRITE_EVENTS_TO_GOOGLE is set but not implemented yet; ignoring (Google is read-only)');
+}
 log.info('message parser', { llm: Boolean(llm), model: llm ? env.PARSER_MODEL : null });
 
 async function disconnectGoogle(store: TokenStore) {
@@ -144,15 +136,37 @@ const security: SecurityConfig | undefined =
       };
 log.info('access control', { auth: env.AUTH_MODE, webUi: Boolean(env.WEB_DIST_DIR) });
 
-const scheduler = new SyncScheduler(db, sources);
-const inbound = createInbound(env, { db, now, parser, creator });
+const scheduler = new SyncScheduler(db, sources, { onChange: (t) => changes.emit(t) });
+const inbound = createInbound(env, { db, now, parser, creator, onChange: (t) => changes.emit(t) });
+
+// Health alerts go to the owner over Telegram when it is configured.
+const telegramAlert =
+  env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_ALLOWED_USER_ID
+    ? async (text: string) => {
+        await new TelegramApi(env.TELEGRAM_BOT_TOKEN!).sendMessage(
+          env.TELEGRAM_ALLOWED_USER_ID!,
+          text,
+        );
+      }
+    : undefined;
+const backups = new BackupService(db, {
+  dir: env.BACKUP_DIR,
+  keep: env.BACKUP_KEEP,
+  hour: env.BACKUP_HOUR,
+  timeZone: env.APP_TIMEZONE,
+  enabled: env.BACKUP_ENABLED,
+  alert: telegramAlert,
+  onChange: (t) => changes.emit(t),
+});
 const app = createApp({
   db,
   scheduler,
   now,
   timeZone: env.APP_TIMEZONE,
   settings,
-  calendar,
+  changes,
+  backups,
+  writeEventsToGoogle: env.WRITE_EVENTS_TO_GOOGLE,
   inbound: inbound ? { pipeline: inbound.pipeline, channels: inbound.channels } : undefined,
   capture: { parser, creator },
   integrations: integrationStatus(env, { db, scheduler, tokenStore, llmAvailable: Boolean(llm) }),
@@ -162,6 +176,7 @@ const app = createApp({
 });
 
 scheduler.start();
+void backups.start();
 inbound?.poller?.start();
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   log.info('server listening', { port: info.port, env: env.NODE_ENV, sources: sources.length });
@@ -170,6 +185,7 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     scheduler.stop();
+    backups.stop();
     inbound?.poller?.stop();
     process.exit(0);
   });

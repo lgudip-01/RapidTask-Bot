@@ -100,7 +100,7 @@ describe('Telegram webhook', () => {
     const res = await h.postTelegram(loadFixture('inbound/telegram-text.json'));
     expect(res.status).toBe(200);
     expect(h.telegramReplies()).toEqual([
-      'Added to calendar: Dentist — Tue, Oct 13, 3:00–4:00 PM. Reply UNDO to remove.',
+      'Added event: Dentist — Tue, Oct 13, 3:00–4:00 PM. Reply UNDO to remove.',
     ]);
     const call = h.telegramApi.calls[0]!;
     expect(call.url.pathname).toBe('/bot123:test-bot-token/sendMessage');

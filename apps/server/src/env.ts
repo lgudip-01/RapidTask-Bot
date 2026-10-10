@@ -12,6 +12,19 @@ const EnvSchema = z
     APP_TIMEZONE: z.string().default('America/New_York'),
     DATABASE_PATH: z.string().default('./data/planner.db'),
 
+    // Nightly backups: the database is the only copy of Planner-only tasks and events.
+    BACKUP_ENABLED: z.stringbool().default(true),
+    BACKUP_DIR: z.string().default('./data/backups'),
+    /** Local hour (APP_TIMEZONE) for the nightly backup. */
+    BACKUP_HOUR: z.coerce.number().int().min(0).max(23).default(3),
+    BACKUP_KEEP: z.coerce.number().int().min(1).max(365).default(14),
+
+    /**
+     * Future option, NOT implemented: copy events created in Planner to Google Calendar.
+     * Must stay false; Google access is read-only (calendar.readonly).
+     */
+    WRITE_EVENTS_TO_GOOGLE: z.stringbool().default(false),
+
     // Token storage for OAuth refresh tokens.
     TOKEN_STORE: z.enum(['auto', 'keyring', 'file']).default('auto'),
     TOKEN_FILE_PATH: z.string().default('./data/tokens.enc.json'),

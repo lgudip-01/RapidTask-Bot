@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { makeTestEnv } from '../../test/helpers';
-import { exportTasks } from '../dev/backup';
+import { exportData } from '../backup/backup';
 import { loadEnv } from '../env';
 import { sanitizeError } from '../log';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth';
@@ -288,8 +288,8 @@ describe('backup', () => {
   it('exports every task as JSON', async () => {
     const e = makeTestEnv([]);
     await e.json('POST', '/api/tasks', { title: 'Back me up' });
-    const out = exportTasks(e.db, new Date('2026-10-09T16:00:00Z'));
-    expect(out).toMatchObject({ version: 1, count: 1, exportedAt: '2026-10-09T16:00:00.000Z' });
+    const out = exportData(e.db, new Date('2026-10-09T16:00:00Z'));
+    expect(out).toMatchObject({ version: 2, count: 1, exportedAt: '2026-10-09T16:00:00.000Z' });
     expect(out.tasks[0]).toMatchObject({ title: 'Back me up', source: 'local' });
   });
 });

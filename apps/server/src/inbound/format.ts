@@ -41,14 +41,9 @@ export function describeWhen(item: ResolvedCapture, timeZone: string): string {
     : `due ${formatDate(item.due, timeZone)}, ${formatTime(item.due, timeZone)}`;
 }
 
-export function confirmationText(
-  item: ResolvedCapture,
-  timeZone: string,
-  fallbackNote: string | null,
-): string {
-  const head = item.kind === 'event' ? 'Added to calendar' : 'Added task';
-  const note = fallbackNote ? ` (${fallbackNote})` : '';
-  return `${head}: ${item.title} — ${describeWhen(item, timeZone)}${note}. Reply UNDO to remove.`;
+export function confirmationText(item: ResolvedCapture, timeZone: string): string {
+  const head = item.kind === 'event' ? 'Added event' : 'Added task';
+  return `${head}: ${item.title} — ${describeWhen(item, timeZone)}. Reply UNDO to remove.`;
 }
 
 /** Strips control characters from model-written text before it is sent anywhere. */

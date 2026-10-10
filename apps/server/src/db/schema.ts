@@ -175,3 +175,24 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
   updatedAt: ts('updated_at').notNull(),
 });
+
+/** One row per backup attempt (nightly, manual, or catch-up). */
+export const backupRuns = sqliteTable(
+  'backup_runs',
+  {
+    id: text('id').primaryKey(),
+    reason: text('reason', { enum: ['scheduled', 'manual', 'catch-up'] }).notNull(),
+    startedAt: ts('started_at').notNull(),
+    finishedAt: ts('finished_at'),
+    ok: bool('ok').notNull().default(false),
+    /** Snapshot file name inside BACKUP_DIR. */
+    file: text('file'),
+    sizeBytes: integer('size_bytes'),
+    taskCount: integer('task_count'),
+    eventCount: integer('event_count'),
+    /** Sanitized error message when ok = false. */
+    error: text('error'),
+  },
+  (t) => [index('backup_runs_started_idx').on(t.startedAt)],
+);
+export type BackupRunRow = typeof backupRuns.$inferSelect;

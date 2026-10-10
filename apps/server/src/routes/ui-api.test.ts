@@ -32,7 +32,7 @@ function env() {
           timeZone: TZ,
           now,
         }),
-        creator: new ItemCreator({ db, now, timeZone: TZ }),
+        creator: new ItemCreator({ db, now }),
       },
     };
   });

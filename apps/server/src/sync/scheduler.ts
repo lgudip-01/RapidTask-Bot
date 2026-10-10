@@ -20,6 +20,8 @@ export interface SchedulerOptions {
   maxBackoffMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /** Called after a sync stores data, so open UIs refresh. */
+  onChange?: (topic: 'sync') => void;
 }
 
 /** Delay before the next run: the interval on success, exponential backoff (capped, jittered) on failure. */
@@ -39,6 +41,7 @@ export class SyncScheduler {
   private readonly maxBackoffMs: number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
+  private readonly onChange?: (topic: 'sync') => void;
 
   constructor(
     private readonly db: Db,
@@ -57,6 +60,7 @@ export class SyncScheduler {
         return t;
       });
     this.clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as NodeJS.Timeout));
+    this.onChange = opts.onChange;
   }
 
   has(name: string) {
@@ -96,6 +100,7 @@ export class SyncScheduler {
       const res = applySyncBatch(this.db, src, batch, this.now());
       this.setNextRun(name, delay);
       log.info('sync ok', { source: name, upserted: res.upserted, deleted: res.deleted });
+      if (res.upserted || res.deleted) this.onChange?.('sync');
       return { ok: true, ...res };
     } catch (e) {
       const error = sanitizeError(e);

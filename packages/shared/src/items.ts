@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Where an item came from. `local` = created in this app. */
-export const SOURCES = ['google_calendar', 'google_tasks', 'canvas', 'local'] as const;
+export const SOURCES = ['google_calendar', 'canvas', 'local'] as const;
 export const SourceSchema = z.enum(SOURCES);
 export type Source = z.infer<typeof SourceSchema>;
 
@@ -169,36 +169,22 @@ export const EventTimesSchema = z.union([
 ]);
 export type EventTimes = z.infer<typeof EventTimesSchema>;
 
-/**
- * Writes to an external calendar must be confirmed explicitly. Without `confirm: true` the
- * server answers 400 `confirmation_required` with a preview and changes nothing.
- */
-const Confirm = z.boolean().optional();
-
+/** A Planner-only (local) event. Google and Canvas events are read-only. */
 export const NewEventSchema = z
   .object({
     title: Title,
     when: EventTimesSchema,
     location: z.string().max(500).nullish(),
     description: z.string().max(8000).nullish(),
-    calendarId: z.string().min(1).optional(),
-    confirm: Confirm,
   })
   .strict();
 export type NewEvent = z.input<typeof NewEventSchema>;
 
-export const EventPatchSchema = z
-  .object({
-    title: Title.optional(),
-    when: EventTimesSchema.optional(),
-    location: z.string().max(500).nullish(),
-    description: z.string().max(8000).nullish(),
-    confirm: Confirm,
-  })
-  .strict();
+export const EventPatchSchema = NewEventSchema.partial().strict();
 export type EventPatch = z.input<typeof EventPatchSchema>;
 
-export const ConfirmSchema = z.object({ confirm: Confirm }).strict();
+/** Which sources the app may change. Everything else is read-only. */
+export const isEditableSource = (s: Source) => s === 'local';
 
 /** A course from an LMS. Grades are stored but the UI hides them unless enabled. */
 export const CourseSchema = z.object({
@@ -276,7 +262,7 @@ export const AcceptSuggestionSchema = z.discriminatedUnion('kind', [
 export type AcceptSuggestion = z.input<typeof AcceptSuggestionSchema>;
 
 export const IntegrationStatusSchema = z.object({
-  id: z.enum(['google_calendar', 'google_tasks', 'canvas', 'telegram', 'twilio', 'parser']),
+  id: z.enum(['google_calendar', 'canvas', 'telegram', 'twilio', 'parser']),
   label: z.string(),
   configured: z.boolean(),
   /** e.g. "keyring", "rest", "ics", "polling", "webhook", model id */
