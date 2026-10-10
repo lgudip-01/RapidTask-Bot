@@ -1,10 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fakeSource, makeTestEnv } from '../../test/helpers';
 import { ChangeBus } from '../changes';
-import { calendarEvents, tasks } from '../db/schema';
+import { calendarEvents } from '../db/schema';
 
 const timed = {
   title: 'Study session',
@@ -79,49 +76,5 @@ describe('live change notifications', () => {
     expect(await read()).toMatch(/event: change\n.*"topic":"items"/s);
     ac.abort();
     await reader.cancel();
-  });
-});
-
-describe('migration 0005: Google Tasks rows become Planner tasks', () => {
-  it('converts google_tasks rows and their captures to local', () => {
-    const e = makeTestEnv([]);
-    const raw = e.db.$client;
-    const at = Date.parse('2026-10-09T16:00:00Z');
-    raw
-      .prepare(
-        `INSERT INTO tasks (id, source, external_id, title, due_all_day, status, status_set_locally, url, sort_order, created_at, updated_at, synced_at)
-         VALUES ('t1', 'google_tasks', '@default/abc', 'Call landlord', 1, 'todo', 1, 'https://tasks.google.com/x', 0, ?, ?, ?)`,
-      )
-      .run(at, at, at);
-    raw
-      .prepare(
-        `INSERT INTO inbound_messages (id, channel, provider_message_id, received_at, text_length) VALUES ('m1', 'telegram', '1', ?, 5)`,
-      )
-      .run(at);
-    raw
-      .prepare(
-        `INSERT INTO captures (id, inbound_id, kind, source, item_id, external_id, title, created_at) VALUES ('c1', 'm1', 'task', 'google_tasks', 't1', '@default/abc', 'Call landlord', ?)`,
-      )
-      .run(at);
-
-    const sqlFile = path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../../drizzle/0005_local_only_tasks.sql',
-    );
-    for (const stmt of fs.readFileSync(sqlFile, 'utf8').split('--> statement-breakpoint'))
-      raw.exec(stmt);
-
-    expect(e.db.select().from(tasks).get()).toMatchObject({
-      id: 't1',
-      source: 'local',
-      externalId: 't1',
-      title: 'Call landlord',
-      statusSetLocally: false,
-      url: null,
-    });
-    expect(raw.prepare(`SELECT source, external_id FROM captures`).get()).toEqual({
-      source: 'local',
-      external_id: 't1',
-    });
   });
 });

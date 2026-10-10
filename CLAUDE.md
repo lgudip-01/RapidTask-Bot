@@ -2,9 +2,9 @@
 
 ## Project
 
-A personal calendar / planner / to-do web app for one user. It unifies Google Calendar (events),
-Google Tasks (to-dos), and Canvas LMS (assignments), and accepts new tasks/events by text message
-from the owner.
+A personal calendar / planner / to-do web app for one user. It shows Google Calendar (events,
+read-only), Canvas LMS (assignments, read-only), and its own local tasks and events in one place,
+and accepts new tasks/events by text message from the owner.
 
 ## Stack
 
@@ -19,7 +19,9 @@ TypeScript everywhere. npm workspaces:
 - Single-user app deployed to a small cloud host. The web UI sits behind authentication
   (single-user login or Cloudflare Access). Only the webhook route is public.
 - Secrets in environment variables only. Never log tokens or message bodies.
-- Canvas integration is READ-ONLY. Google Calendar/Tasks and local tasks are read/write.
+- Google is READ-ONLY (OAuth scope `calendar.readonly`, GET requests only). Canvas is READ-ONLY.
+  Local items (`source = local`) are the only writable data. Nothing is ever written to Google or
+  Canvas. `WRITE_EVENTS_TO_GOOGLE` is a reserved flag with no implementation.
 - Inbound messages are accepted ONLY from the owner's allowlisted sender ID, after verifying the
   provider's request signature. Everything else is dropped silently with a rate-limited log line.
 - Every item is normalized to shared types with `source`, `externalId`, `syncedAt`. Sync is

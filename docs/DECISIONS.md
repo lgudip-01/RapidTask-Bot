@@ -32,7 +32,7 @@ Newest at the bottom. Each entry: context → decision → consequences.
   cross the API as ISO 8601 strings.
 - All-day items are converted to instants at midnight in `APP_TIMEZONE` (default
   `America/New_York`) when they are ingested. Event `end` is exclusive, matching Google.
-- `tasks.dueAllDay` marks date-only deadlines (Google Tasks due dates have no time; Canvas dues do).
+- `tasks.dueAllDay` marks date-only deadlines (e.g. "rent due Friday"); Canvas dues have a time.
 
 ## 006 — Sync engine (2026-10-09)
 
@@ -51,15 +51,16 @@ Newest at the bottom. Each entry: context → decision → consequences.
 - Synced tasks allow local edits to `status` and `sortOrder` only. Changing status sets
   `statusSetLocally`, and sync then never overwrites `status`/`completedAt` (lets you tick off a
   read-only Canvas assignment). Other fields → 403. Synced tasks cannot be deleted locally.
-- Google Tasks write-back is a later milestone; until then the same local-override rule applies.
+- Revised 2026-10-10 (see 016): Google and Canvas are read-only; only `source = local` items are
+  fully editable.
 
 ## 008 — Google Calendar integration (2026-10-09)
 
-- **Raw REST via `fetch`, not `googleapis`.** Four endpoints (list/insert/patch/delete) don't
-  justify a very large dependency; an injectable `fetch` makes recorded-fixture tests trivial.
+- **Raw REST via `fetch`, not `googleapis`.** One endpoint (`events.list`, GET) doesn't justify a
+  very large dependency; an injectable `fetch` makes recorded-fixture tests trivial.
 - **OAuth:** Desktop client, loopback redirect on `127.0.0.1:<ephemeral>`, PKCE (S256) + `state`,
-  `access_type=offline&prompt=consent`. Scopes: `calendar.events` + `tasks` (not full `calendar`;
-  `tasks` is requested now so inbound capture won't need a second consent). Only the refresh
+  `access_type=offline&prompt=consent`. Scope: `calendar.readonly` only (revised 2026-10-10, see
+  016). Only the refresh
   token is persisted; access tokens live in memory and are refreshed 60 s early; one retry on 401.
 - **Token storage:** OS keyring via `@napi-rs/keyring` (Windows Credential Manager on the dev box;
   the original brief said macOS Keychain, but the machine is Windows). Fallback: AES-256-GCM file
@@ -72,9 +73,8 @@ Newest at the bottom. Each entry: context → decision → consequences.
   Cancelled entries → deletes. `workingLocation` entries are skipped.
 - **Times:** stored UTC; date-times without an offset are read in the event's/calendar's zone;
   all-day dates are anchored at midnight `APP_TIMEZONE` (America/New_York). UI renders in that zone.
-- **Writes:** `POST/PATCH/DELETE /api/calendar/events` require `"confirm": true`; otherwise 400
-  `confirmation_required` with a preview and no upstream call. Results are upserted immediately;
-  the next incremental sync returns the same event and is a no-op.
+- **No writes** (revised 2026-10-10, see 016): the client has a single private `get()`; the old
+  confirmed write endpoints were deleted.
 - Known limit: recurring series with no end are expanded by Google from `timeMin` forward; very
   dense infinite series could make the first sync large.
 
@@ -173,13 +173,10 @@ needs_clarification | off_topic`. `off_topic` was added beyond the original brie
 - **Storage:** `inbound_messages` (dedupe + audit: channel, id, time, text length, outcome, parse
   route) and `captures` (item reference + title for UNDO). Message text is never persisted.
   Unresolved clarifications become `suggestions` (model-proposed title only).
-- **Destinations:** events → Google Calendar, tasks → Google Tasks (`@default` list; due is
-  date-only upstream, the local mirror keeps the time). If Google is not configured or the write
-  fails, the item is saved locally and the reply says so.
+- **Destinations** (revised 2026-10-10, see 016): every texted item becomes a local task or
+  local event in Planner. Nothing is sent to Google.
 - Drops (bad signature, non-allowlisted sender, duplicate, rate limit) log one line per reason per
   minute with a suppressed count, never the content or sender.
-- Gap: there is no Google Tasks _sync_ source yet; completing a texted task in the Google Tasks app
-  is not reflected locally until one is added.
 
 ## 014 — Web UI (2026-10-09)
 
@@ -219,3 +216,20 @@ same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our 
   `uncaughtException`/`unhandledRejection` handlers log sanitized messages only.
 - **Backups**: `npm run backup` (tasks → JSON); same script bundled as `dist/backup.js` for
   `fly ssh console`.
+
+## 016 — Google and Canvas are read-only; Planner is the only writable store (2026-10-10)
+
+- The Google Tasks integration was removed. Sources are now `google_calendar`, `canvas`, and
+  `local`. The only database that ever held Google Tasks rows was the dev seed database, so no
+  data migration was kept (`npm run seed -- --reset` rebuilds it).
+- The Google OAuth scope is `calendar.readonly` only. `GoogleCalendarClient` has one private `get()`
+  and `listEvents()`. The confirmed write endpoints were deleted. Guard tests
+  (`security/readonly-guards.test.ts`) fail the build if:
+  - the scope changes;
+  - any other file calls the Calendar API;
+  - the client gains a non-GET call or a write method;
+  - Canvas code sets an HTTP method.
+- Every texted item becomes a local task or local event. Synced Canvas tasks still accept a local
+  `status`/`sortOrder` override (check-off), which is stored only in Planner.
+- After revoking the old grant, re-authorize with `npm run auth:google`; see
+  `docs/SETUP-GOOGLE.md`.

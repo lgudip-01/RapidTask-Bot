@@ -1,8 +1,8 @@
 # Planner
 
-A personal calendar, planner and to-do app for one person. It merges **Google Calendar**
-(events), **Google Tasks** (to-dos) and **Canvas LMS** (assignments, read-only) into one
-view, and lets you add items by **texting a Telegram bot or an SMS number**.
+A personal calendar, planner and to-do app for one person. It shows **Google Calendar**
+(events, read-only), **Canvas LMS** (assignments, read-only) and its own **local tasks and
+events** in one view, and lets you add items by **texting a Telegram bot or an SMS number**.
 
 ```
 apps/web         Vite + React + Tailwind UI (Today, Week, Tasks, Suggestions, Settings)
@@ -33,11 +33,11 @@ and `npm run backup`, which exports every task to `./backups/tasks-<time>.json`.
 Each one is optional. Settings in the UI shows what is configured, when it last synced,
 and the last error.
 
-### Google Calendar + Google Tasks
+### Google Calendar (read-only)
 
-1. In Google Cloud Console, create a project and enable **Google Calendar API** and **Google Tasks API**.
+1. In Google Cloud Console, create a project and enable the **Google Calendar API** (nothing else).
 2. Open **Google Auth Platform**, choose **Get started**, and set the audience to **External**.
-   Under **Data Access**, add the scopes `…/auth/calendar.events` and `…/auth/tasks`.
+   Under **Data Access**, add only the scope `…/auth/calendar.readonly`.
    Under **Audience → Test users**, add your Gmail address.
 3. Under **Clients**, create a client with type **Desktop app**. Put its ID and secret in
    `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
@@ -49,8 +49,8 @@ and the last error.
    production), click through the "unverified app" warning, and **run step 4 again**.
    With a Google Workspace account, the alternative is to set the audience to _Internal_.
 
-All event writes from the app need `"confirm": true`. Recurring events are synced as
-individual instances.
+Planner never writes to Google: it only sends GET requests, and the scope is read-only.
+Recurring events are synced as individual instances.
 
 ### Canvas (read-only)
 
@@ -168,8 +168,8 @@ every variable.
 
 ## Threat model
 
-**Assets:** your schedule and tasks, the OAuth refresh token (Calendar and Tasks write
-access), the Canvas token (read access to your coursework and grades), the bot and Twilio
+**Assets:** your schedule and tasks, the OAuth refresh token (read-only
+Calendar access), the Canvas token (read access to your coursework and grades), the bot and Twilio
 credentials, and the Anthropic key (spend).
 
 **Trust boundaries:** the internet → Fly proxy (TLS) → app. Webhooks are public but signed;
