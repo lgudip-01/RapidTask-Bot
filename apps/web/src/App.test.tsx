@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_SETTINGS } from '@planner/shared';
 import { App } from './App';
 import { defaultRoutes, mockApi, task } from './test/fixtures';
 
@@ -161,5 +162,23 @@ describe('Settings', () => {
     await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(toggle);
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     expect(api.calls.filter((c) => c.method !== 'GET')).toEqual([]);
+  });
+});
+
+describe('Settings: notifications', () => {
+  it('shows the digest time and saves a change', async () => {
+    const api = renderApp({
+      'PATCH /api/settings': (body) => ({ settings: { ...DEFAULT_SETTINGS, ...(body as object) } }),
+    });
+    window.location.hash = '#/settings';
+    const time = (await screen.findAllByLabelText('Send at'))[0] as HTMLInputElement;
+    expect(time.value).toBe('07:30');
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole('switch', { name: 'Event reminders' }));
+    await waitFor(() =>
+      expect(api.calls.filter((c) => c.method === 'PATCH')).toEqual([
+        { method: 'PATCH', path: '/api/settings', body: { eventReminders: false } },
+      ]),
+    );
   });
 });

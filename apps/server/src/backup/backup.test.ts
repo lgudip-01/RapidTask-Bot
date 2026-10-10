@@ -11,7 +11,7 @@ import { restoreSnapshot } from './restore';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'planner-backup-'));
 const HOUR = 3_600_000;
 
-function setup(opts: { keep?: number; alerts?: string[]; failDir?: boolean } = {}) {
+function setup(opts: { keep?: number; failDir?: boolean } = {}) {
   const dir = tmp();
   const dbPath = path.join(dir, 'planner.db');
   const db = createDb(dbPath);
@@ -26,7 +26,6 @@ function setup(opts: { keep?: number; alerts?: string[]; failDir?: boolean } = {
     timeZone: 'America/New_York',
     enabled: true,
     now: () => new Date(t),
-    alert: async (text) => void opts.alerts?.push(text),
     setTimer: (fn, ms) => timers.push({ fn, ms }),
     clearTimer: () => {},
   });
@@ -86,31 +85,25 @@ describe('BackupService', () => {
     ]);
   });
 
-  it('records failures and alerts the owner once', async () => {
-    const alerts: string[] = [];
-    const s = setup({ failDir: true, alerts });
+  // Alerting on these states is the Notifier's job (notify/notifier.test.ts).
+  it('records failures and reports health "failed" until a good run', async () => {
+    const s = setup({ failDir: true });
     const run = await s.service.runNow('manual');
     expect(run.ok).toBe(false);
     expect(run.error).toMatch(/EEXIST|ENOTDIR|exists/i);
-    expect(s.service.status().health).toBe('failed');
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatch(/^⚠️ Planner backup failed/);
-    await s.service.checkHealth(); // same state within a day → no repeat
-    expect(alerts).toHaveLength(1);
-    s.advance(25 * HOUR);
-    await s.service.checkHealth();
-    expect(alerts).toHaveLength(2);
+    expect(s.service.status()).toMatchObject({ health: 'failed', lastError: run.error });
   });
 
-  it('alerts when the newest good backup is older than 48 hours', async () => {
-    const alerts: string[] = [];
-    const s = setup({ alerts });
+  it('reports "stale" once the newest good backup is older than 48 hours', async () => {
+    const s = setup();
     await s.service.runNow('manual');
     s.advance(47 * HOUR);
-    expect(await s.service.checkHealth()).toBe('ok');
+    expect(s.service.status().health).toBe('ok');
     s.advance(2 * HOUR);
-    expect(await s.service.checkHealth()).toBe('stale');
-    expect(alerts).toEqual([expect.stringContaining('stale. Last good backup: 49 hours ago')]);
+    expect(s.service.status()).toMatchObject({
+      health: 'stale',
+      lastSuccessAt: '2026-10-09T16:00:00.000Z',
+    });
   });
 
   it('reports "never" (not stale) right after first start, and catches up immediately', async () => {
@@ -122,7 +115,8 @@ describe('BackupService', () => {
     ]);
     // Nightly at 03:00 New York = 07:00 UTC tomorrow (now is 12:00 EDT).
     expect(s.service.status().nextScheduledAt).toBe('2026-10-10T07:00:00.000Z');
-    expect(s.timers.map((x) => x.ms)).toEqual([15 * HOUR, HOUR]);
+    // Only the nightly timer: health is checked by the Notifier every minute.
+    expect(s.timers.map((x) => x.ms)).toEqual([15 * HOUR]);
   });
 });
 

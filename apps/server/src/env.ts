@@ -58,6 +58,13 @@ const EnvSchema = z
     CANVAS_LOOKBACK_DAYS: z.coerce.number().int().nonnegative().default(30),
     CANVAS_LOOKAHEAD_DAYS: z.coerce.number().int().positive().default(120),
     CANVAS_SYNC_GRADES: z.stringbool().default(true),
+    /** When your Canvas token expires (YYYY-MM-DD); Planner warns 7 days ahead. */
+    CANVAS_TOKEN_EXPIRES_AT: optionalString.pipe(z.iso.date().optional()),
+
+    // Proactive messages (digest, reminders, health alerts) go to the Telegram owner.
+    NOTIFICATIONS_ENABLED: z.stringbool().default(true),
+    /** Consecutive failures of one sync source before a health alert. */
+    SYNC_FAILURE_ALERT_THRESHOLD: z.coerce.number().int().min(1).default(3),
 
     // Message parser (Claude). Without a key only the deterministic fast path runs.
     ANTHROPIC_API_KEY: optionalString,

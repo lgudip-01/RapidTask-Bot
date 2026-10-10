@@ -1,6 +1,8 @@
 import { serve } from '@hono/node-server';
 import { CanvasClient } from '@planner/canvas';
+import { zonedTimeToUtc } from '@planner/shared';
 import { createApp } from './app';
+import { Notifier } from './notify/notifier';
 import { BackupService } from './backup/backup';
 import { CanvasIcsSource } from './canvas/canvas-ics-source';
 import { CanvasSource } from './canvas/canvas-source';
@@ -156,7 +158,6 @@ const backups = new BackupService(db, {
   hour: env.BACKUP_HOUR,
   timeZone: env.APP_TIMEZONE,
   enabled: env.BACKUP_ENABLED,
-  alert: telegramAlert,
   onChange: (t) => changes.emit(t),
 });
 const app = createApp({
@@ -176,8 +177,25 @@ const app = createApp({
   webDist: env.WEB_DIST_DIR,
 });
 
+const ymd = (d: string) => d.split('-').map(Number) as [number, number, number];
+const notifier =
+  env.NOTIFICATIONS_ENABLED && telegramAlert
+    ? new Notifier(db, {
+        timeZone: env.APP_TIMEZONE,
+        settings: () => settings.get(),
+        send: telegramAlert,
+        backupStatus: () => backups.status(),
+        canvasTokenExpiresAt: env.CANVAS_TOKEN_EXPIRES_AT
+          ? zonedTimeToUtc(env.APP_TIMEZONE, ...ymd(env.CANVAS_TOKEN_EXPIRES_AT))
+          : undefined,
+        syncFailureThreshold: env.SYNC_FAILURE_ALERT_THRESHOLD,
+      })
+    : null;
+log.info('notifications', { enabled: Boolean(notifier) });
+
 scheduler.start();
 void backups.start();
+notifier?.start();
 inbound?.poller?.start();
 serve({ fetch: app.fetch, port: env.PORT, hostname: env.HOST }, (info) => {
   log.info('server listening', {
@@ -192,6 +210,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     scheduler.stop();
     backups.stop();
+    notifier?.stop();
     inbound?.poller?.stop();
     process.exit(0);
   });

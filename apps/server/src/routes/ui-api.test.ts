@@ -42,15 +42,28 @@ function env() {
 describe('settings', () => {
   it('defaults, patches, and validates', async () => {
     const e = env();
-    expect((await e.json('GET', '/api/settings')).body.settings).toEqual({
+    const defaults = {
       aiTriage: true,
       showGrades: false,
-    });
+      digestEnabled: true,
+      digestTime: '07:30',
+      deadlineReminders: true,
+      deadlineReminderTime: '19:00',
+      eventReminders: true,
+      eventReminderMinutes: 60,
+    };
+    expect((await e.json('GET', '/api/settings')).body.settings).toEqual(defaults);
     expect((await e.json('PATCH', '/api/settings', { showGrades: true })).body.settings).toEqual({
-      aiTriage: true,
+      ...defaults,
       showGrades: true,
     });
+    expect(
+      (await e.json('PATCH', '/api/settings', { digestTime: '06:45' })).body.settings,
+    ).toMatchObject({ digestTime: '06:45', showGrades: true });
     expect((await e.json('PATCH', '/api/settings', { showGrades: 'yes' })).status).toBe(400);
+    expect((await e.json('PATCH', '/api/settings', { digestTime: '7:30' })).status).toBe(400);
+    expect((await e.json('PATCH', '/api/settings', { digestTime: '24:00' })).status).toBe(400);
+    expect((await e.json('PATCH', '/api/settings', { eventReminderMinutes: 1 })).status).toBe(400);
     expect((await e.json('PATCH', '/api/settings', { admin: true })).status).toBe(400);
   });
 

@@ -1,4 +1,10 @@
-import type { AgendaItem, CalendarEvent, Suggestion, Task } from '@planner/shared';
+import {
+  DEFAULT_SETTINGS,
+  type AgendaItem,
+  type CalendarEvent,
+  type Suggestion,
+  type Task,
+} from '@planner/shared';
 
 /** Recorded-shape API payloads for "today" = Fri 2026-10-09 (America/New_York). */
 const base = { syncedAt: '2026-10-09T15:00:00.000Z', updatedAt: '2026-10-09T15:00:00.000Z' };
@@ -109,6 +115,6 @@ export const defaultRoutes = {
   'GET /api/tasks': () => ({
     tasks: agendaToday.flatMap((i) => (i.kind === 'task' ? [i.item] : [])),
   }),
-  'GET /api/settings': () => ({ settings: { aiTriage: true, showGrades: false } }),
+  'GET /api/settings': () => ({ settings: DEFAULT_SETTINGS }),
   'GET /api/status': () => ({ integrations: [] }),
 };

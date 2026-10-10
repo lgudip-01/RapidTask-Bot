@@ -12,7 +12,6 @@ import { log, sanitizeError } from '../log';
 
 const HOUR = 3_600_000;
 export const STALE_AFTER_MS = 48 * HOUR;
-const ALERT_REPEAT_MS = 24 * HOUR;
 const SNAPSHOT_RE = /^planner-\d{8}-\d{6}\.db$/;
 
 export type BackupHealth = 'ok' | 'never' | 'stale' | 'failed';
@@ -84,8 +83,6 @@ export interface BackupOptions {
   timeZone: string;
   enabled: boolean;
   now?: () => Date;
-  /** Sends the owner a message (Telegram). Absent: alerts are only logged. */
-  alert?: (text: string) => Promise<void>;
   onChange?: (topic: ChangeTopic) => void;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (h: unknown) => void;
@@ -93,14 +90,13 @@ export interface BackupOptions {
 
 /**
  * Nightly backups: a consistent SQLite snapshot (online backup API) plus a JSON export, pruned to
- * the newest `keep`. An hourly health check alerts the owner when a backup failed or the newest
- * good one is older than 48 hours.
+ * the newest `keep`. `status()` reports health; the Notifier alerts the owner when a backup failed
+ * or the newest good one is older than 48 hours.
  */
 export class BackupService {
   private running = false;
   private readonly startedAt: number;
   private readonly timers: unknown[] = [];
-  private lastAlert: { health: BackupHealth; at: number } | null = null;
   private readonly now: () => Date;
 
   constructor(
@@ -207,7 +203,6 @@ export class BackupService {
     } finally {
       this.running = false;
       this.o.onChange?.('backup');
-      await this.checkHealth();
     }
   }
 
@@ -224,40 +219,8 @@ export class BackupService {
     }
   }
 
-  /** Alerts on 'failed' or 'stale', at most once per state change or once a day. */
-  async checkHealth(): Promise<BackupHealth> {
-    const s = this.status();
-    if (s.health !== 'failed' && s.health !== 'stale') {
-      this.lastAlert = null;
-      return s.health;
-    }
-    const t = this.now().getTime();
-    if (
-      this.lastAlert &&
-      this.lastAlert.health === s.health &&
-      t - this.lastAlert.at < ALERT_REPEAT_MS
-    ) {
-      return s.health;
-    }
-    this.lastAlert = { health: s.health, at: t };
-    const since = s.lastSuccessAt
-      ? `${Math.round((t - Date.parse(s.lastSuccessAt)) / HOUR)} hours ago`
-      : 'never';
-    const text =
-      s.health === 'failed'
-        ? `⚠️ Planner backup failed (${s.lastError ?? 'unknown error'}). Last good backup: ${since}. Open Settings → Backups.`
-        : `⚠️ Planner backups are stale. Last good backup: ${since}. Open Settings → Backups.`;
-    log.warn('backup health alert', { health: s.health });
-    try {
-      await this.o.alert?.(text);
-    } catch (e) {
-      log.error('backup alert could not be sent', { error: sanitizeError(e) });
-    }
-    return s.health;
-  }
-
   /**
-   * Nightly schedule + hourly health check; catches up at startup if the last backup is >24h old.
+   * Nightly schedule; catches up at startup if the last backup is >24h old.
    * Returns the catch-up run, if one was started.
    */
   start(): Promise<BackupRunRow> | null {
@@ -271,15 +234,7 @@ export class BackupService {
         }, ms),
       );
     };
-    const scheduleHealth = () => {
-      this.timers.push(
-        set(() => {
-          void this.checkHealth().finally(scheduleHealth);
-        }, HOUR),
-      );
-    };
     scheduleNightly();
-    scheduleHealth();
     const good = this.lastRun(true);
     if (!good || this.now().getTime() - good.finishedAt!.getTime() > 24 * HOUR) {
       return this.runNow('catch-up');

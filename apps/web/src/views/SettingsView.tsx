@@ -61,6 +61,30 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** A small time field under a switch; saves on every complete change. */
+function TimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="mt-2 flex items-center gap-2 text-xs text-muted">
+      {label}
+      <input
+        type="time"
+        key={value}
+        defaultValue={value}
+        onChange={(e) => /^\d\d:\d\d$/.test(e.target.value) && onChange(e.target.value)}
+        className="rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-ink"
+      />
+    </label>
+  );
+}
+
 function IntegrationRow({ i }: { i: IntegrationStatus }) {
   const sync = useSyncNow();
   const disconnect = useDisconnectGoogle();
@@ -167,6 +191,77 @@ export function SettingsView() {
           Only the allowlisted Telegram user and phone number above can add items. Everything else
           is dropped.
         </p>
+      </Card>
+
+      <Card title="Notifications (Telegram)">
+        {integrations.data && !inbound.find((i) => i.id === 'telegram')?.configured && (
+          <p className="mb-3 rounded-md bg-warn-soft px-2 py-1 text-xs text-warn">
+            Telegram isn’t set up, so nothing is sent. See docs/SETUP-TELEGRAM.md.
+          </p>
+        )}
+        {settings.data && (
+          <div className="space-y-4">
+            <div>
+              <Switch
+                label="Daily digest"
+                description="Today’s events and tasks, every morning."
+                checked={settings.data.digestEnabled}
+                onChange={(v) => patch.mutate({ digestEnabled: v })}
+              />
+              {settings.data.digestEnabled && (
+                <TimeField
+                  label="Send at"
+                  value={settings.data.digestTime}
+                  onChange={(v) => patch.mutate({ digestTime: v })}
+                />
+              )}
+            </div>
+            <div>
+              <Switch
+                label="Deadline reminders"
+                description="The evening before a Canvas assignment or one of your tasks is due."
+                checked={settings.data.deadlineReminders}
+                onChange={(v) => patch.mutate({ deadlineReminders: v })}
+              />
+              {settings.data.deadlineReminders && (
+                <TimeField
+                  label="Send at"
+                  value={settings.data.deadlineReminderTime}
+                  onChange={(v) => patch.mutate({ deadlineReminderTime: v })}
+                />
+              )}
+            </div>
+            <div>
+              <Switch
+                label="Event reminders"
+                description="Before each timed event, from Google Calendar or Planner."
+                checked={settings.data.eventReminders}
+                onChange={(v) => patch.mutate({ eventReminders: v })}
+              />
+              {settings.data.eventReminders && (
+                <label className="mt-2 flex items-center gap-2 text-xs text-muted">
+                  Remind me
+                  <select
+                    value={settings.data.eventReminderMinutes}
+                    onChange={(e) => patch.mutate({ eventReminderMinutes: Number(e.target.value) })}
+                    className="rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-ink"
+                  >
+                    {[15, 30, 60, 120].map((m) => (
+                      <option key={m} value={m}>
+                        {m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}`} before
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            <p className="text-xs text-muted">
+              Health alerts are always on: Google access revoked, Canvas token failing or about to
+              expire, a sync failing repeatedly, and backups failing or older than 48 hours. Each is
+              sent at most once a day.
+            </p>
+          </div>
+        )}
       </Card>
 
       <Card title="Behavior">

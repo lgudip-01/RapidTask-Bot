@@ -245,3 +245,26 @@ same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our 
   - mapping local events to Google event ids so edits and deletes follow;
   - a decision about which copy wins on conflict.
     Until then, the read-only guard tests forbid any such code.
+
+## 018 — Proactive notifications (2026-10-10)
+
+- `Notifier` checks once a minute and sends to the Telegram owner (the allowlisted user's private
+  chat). It is off when Telegram is not configured or `NOTIFICATIONS_ENABLED=false`.
+- **Digest:** at `digestTime` (default 07:30, in APP_TIMEZONE, DST-aware) with the same list as
+  `/today`. If the server was down at that time, it still goes out within 3 hours; after that, the
+  day is skipped.
+- **Deadline reminders:** at `deadlineReminderTime` (default 19:00), for open Canvas and Planner
+  tasks due the next local day.
+- **Event reminders:** `eventReminderMinutes` (default 60) before each timed event from any
+  source. All-day events get none.
+- **Health alerts** (always on, at most once per condition per local day), most specific first:
+  - Google access revoked or expired (`invalid_grant`);
+  - Canvas 401/403;
+  - Canvas token expiring within 7 days (`CANVAS_TOKEN_EXPIRES_AT`);
+  - a sync source failing `SYNC_FAILURE_ALERT_THRESHOLD` (3) times in a row;
+  - a backup that failed or is older than 48 hours.
+    `BackupService` now only reports status; alerting moved here.
+- **Dedupe:** each message is claimed in the `notifications` table (unique `(kind, key)`) before
+  it is sent, and the claim is released if delivery fails so the next tick retries. A restart never
+  resends. Claims older than 90 days are pruned.
+- Settings (UI → Notifications): each kind on/off, with its time or lead.

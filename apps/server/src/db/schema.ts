@@ -196,3 +196,23 @@ export const backupRuns = sqliteTable(
   (t) => [index('backup_runs_started_idx').on(t.startedAt)],
 );
 export type BackupRunRow = typeof backupRuns.$inferSelect;
+
+/**
+ * Every proactive message (digest, reminder, health alert) is claimed here before it is sent, so
+ * each (kind, key) goes out at most once, even across restarts.
+ */
+export const notifications = sqliteTable(
+  'notifications',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind', { enum: ['digest', 'deadline', 'event', 'health'] }).notNull(),
+    /** What was announced, e.g. the local date for a digest or `<eventId>@<start>`. */
+    key: text('key').notNull(),
+    sentAt: ts('sent_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('notifications_kind_key_uq').on(t.kind, t.key),
+    index('notifications_sent_idx').on(t.sentAt),
+  ],
+);
+export type NotificationRow = typeof notifications.$inferSelect;

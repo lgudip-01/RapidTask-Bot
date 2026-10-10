@@ -214,14 +214,35 @@ export const AnnouncementSchema = z.object({
 });
 export type Announcement = z.infer<typeof AnnouncementSchema>;
 
+/** "HH:MM", 24-hour. */
+export const HourMinute = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
 export const SettingsSchema = z.object({
   /** Use Claude for messages the fast parser can't handle. */
   aiTriage: z.boolean(),
   /** Show current Canvas grades in the UI. */
   showGrades: z.boolean(),
+  /** Morning summary over Telegram at digestTime (APP_TIMEZONE). */
+  digestEnabled: z.boolean(),
+  digestTime: HourMinute,
+  /** The evening before a task or Canvas assignment is due, at deadlineReminderTime. */
+  deadlineReminders: z.boolean(),
+  deadlineReminderTime: HourMinute,
+  /** Before each timed event. */
+  eventReminders: z.boolean(),
+  eventReminderMinutes: z.number().int().min(5).max(1440),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
-export const DEFAULT_SETTINGS: Settings = { aiTriage: true, showGrades: false };
+export const DEFAULT_SETTINGS: Settings = {
+  aiTriage: true,
+  showGrades: false,
+  digestEnabled: true,
+  digestTime: '07:30',
+  deadlineReminders: true,
+  deadlineReminderTime: '19:00',
+  eventReminders: true,
+  eventReminderMinutes: 60,
+};
 export const SettingsPatchSchema = SettingsSchema.partial().strict();
 
 /** Result of parsing free text (quick-add preview or capture). Times are ISO instants. */
