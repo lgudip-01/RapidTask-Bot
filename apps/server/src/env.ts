@@ -5,10 +5,15 @@ const optionalString = z
   .optional()
   .transform((v) => (v && v.trim() ? v.trim() : undefined));
 
+export const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(8787),
+    /** Interface to listen on. Loopback by default; the Docker image sets 0.0.0.0. */
+    HOST: z.string().default('127.0.0.1'),
+    HEALTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
     APP_TIMEZONE: z.string().default('America/New_York'),
     DATABASE_PATH: z.string().default('./data/planner.db'),
 
@@ -114,6 +119,14 @@ const EnvSchema = z
     if (e.AUTH_MODE === 'cloudflare') {
       need('CF_ACCESS_TEAM_DOMAIN', e.CF_ACCESS_TEAM_DOMAIN);
       need('CF_ACCESS_AUD', e.CF_ACCESS_AUD);
+    }
+    // Without auth, only this machine may connect.
+    if (e.AUTH_MODE === 'none' && !LOOPBACK_HOSTS.has(e.HOST)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['HOST'],
+        message: 'AUTH_MODE=none requires a loopback HOST',
+      });
     }
     if (e.NODE_ENV === 'production') {
       // Never expose an unauthenticated planner on the internet.

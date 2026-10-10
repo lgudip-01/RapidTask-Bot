@@ -84,6 +84,16 @@ export function createApp(deps: AppDeps) {
         now: sec.now,
       }),
     );
+    app.use(
+      '/health',
+      ipRateLimit({
+        limit: sec.healthRateLimitPerMin ?? 60,
+        windowMs: 60_000,
+        trustProxy: sec.trustProxy,
+        name: 'health',
+        now: sec.now,
+      }),
+    );
     app.use('*', sameOriginWrites(sec.publicOrigin));
     if (sec.publicOrigin)
       app.use('/api/*', cors({ origin: [sec.publicOrigin], credentials: true }));
@@ -115,7 +125,7 @@ export function createApp(deps: AppDeps) {
   );
 
   /** Liveness + database check for the platform health check (no auth, no details). */
-  app.get('/healthz', (c) => {
+  app.get('/health', (c) => {
     try {
       deps.db.run(sql`select 1`);
       return c.json({ ok: true });

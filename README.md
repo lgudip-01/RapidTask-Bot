@@ -144,7 +144,7 @@ restores from it on boot. To export tasks only, run
 **Access control:** with `AUTH_MODE=password`, a single-user login page protects the UI
 and `/api/*`. With `AUTH_MODE=cloudflare`, the app sits behind Cloudflare Access; set
 `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`, and the app verifies the Access JWT. Only
-`/webhooks/*` and `/healthz` are public. The server **refuses to start in production**
+`/webhooks/*` and `/health` are public. The server **refuses to start in production**
 without auth and an `https` `PUBLIC_BASE_URL`.
 
 ### Secrets

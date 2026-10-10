@@ -110,9 +110,9 @@ describe('password login', () => {
 });
 
 describe('public routes and hardening', () => {
-  it('keeps /healthz and /webhooks/* reachable without a session', async () => {
+  it('keeps /health and /webhooks/* reachable without a session', async () => {
     const e = env();
-    expect(await (await e.req('/healthz')).json()).toEqual({ ok: true });
+    expect(await (await e.req('/health')).json()).toEqual({ ok: true });
     // No channel configured → 404, but crucially not 401/302.
     expect((await e.req('/webhooks/telegram', { method: 'POST', body: '{}' })).status).toBe(404);
   });
@@ -127,7 +127,7 @@ describe('public routes and hardening', () => {
   });
 
   it('sends security headers', async () => {
-    const res = await env().req('/healthz');
+    const res = await env().req('/health');
     expect(res.headers.get('content-security-policy')).toContain("default-src 'self'");
     expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
     expect(res.headers.get('strict-transport-security')).toContain('max-age=63072000');
@@ -137,7 +137,7 @@ describe('public routes and hardening', () => {
   });
 
   it('redirects plain http to https behind the proxy', async () => {
-    const res = await env().req('/healthz', { headers: { 'x-forwarded-proto': 'http' } });
+    const res = await env().req('/health', { headers: { 'x-forwarded-proto': 'http' } });
     expect(res.status).toBe(301);
     expect(res.headers.get('location')).toMatch(/^https:/);
   });
@@ -182,13 +182,43 @@ describe('public routes and hardening', () => {
 
   it('cloudflare mode requires a valid Access assertion', async () => {
     const e = env({ auth: { mode: 'cloudflare', verify: async (t) => t === 'valid-jwt' } });
-    expect((await e.req('/api/tasks')).status).toBe(403);
+    // API: 401 without valid credentials (same as password mode); pages: 403 (no login page).
+    expect((await e.req('/api/tasks')).status).toBe(401);
     expect(
       (await e.req('/api/tasks', { headers: { 'cf-access-jwt-assertion': 'forged' } })).status,
-    ).toBe(403);
+    ).toBe(401);
+    expect((await e.req('/week')).status).toBe(403);
     expect(
       (await e.req('/api/tasks', { headers: { 'cf-access-jwt-assertion': 'valid-jwt' } })).status,
     ).toBe(200);
+  });
+
+  it('answers 401 on every /api route without a session, and lets only public paths through', async () => {
+    const e = env();
+    for (const url of [
+      '/api/agenda?from=2026-10-09T00:00:00Z&to=2026-10-10T00:00:00Z',
+      '/api/tasks',
+      '/api/events/x',
+      '/api/backups',
+      '/api/settings',
+      '/api/status',
+      '/api/stream',
+      '/api/me',
+    ]) {
+      expect([url, (await e.req(url)).status]).toEqual([url, 401]);
+    }
+    expect(
+      (await e.req('/api/tasks', { method: 'POST', headers: { origin: ORIGIN } })).status,
+    ).toBe(401);
+    expect((await e.req('/health')).status).toBe(200);
+  });
+
+  it('rate limits /health per IP', async () => {
+    const e = env({ healthRateLimitPerMin: 3 });
+    const codes = [];
+    for (let i = 0; i < 5; i++) codes.push((await e.req('/health')).status);
+    expect(codes).toEqual([200, 200, 200, 429, 429]);
+    expect((await e.req('/health', { ip: '198.51.100.9' })).status).toBe(200);
   });
 
   it('serves the built UI with an SPA fallback behind auth', async () => {
@@ -291,5 +321,25 @@ describe('backup', () => {
     const out = exportData(e.db, new Date('2026-10-09T16:00:00Z'));
     expect(out).toMatchObject({ version: 2, count: 1, exportedAt: '2026-10-09T16:00:00.000Z' });
     expect(out.tasks[0]).toMatchObject({ title: 'Back me up', source: 'local' });
+  });
+});
+
+describe('listen address', () => {
+  it('binds to loopback unless told otherwise', () => {
+    expect(loadEnv({}).HOST).toBe('127.0.0.1');
+  });
+
+  it('refuses a non-loopback HOST without authentication', () => {
+    expect(() => loadEnv({ HOST: '0.0.0.0' })).toThrow(/HOST/);
+    expect(() => loadEnv({ HOST: '192.168.1.20', AUTH_MODE: 'none' })).toThrow(/HOST/);
+    expect(loadEnv({ HOST: '::1' }).HOST).toBe('::1');
+    expect(
+      loadEnv({
+        HOST: '0.0.0.0',
+        AUTH_MODE: 'password',
+        AUTH_PASSWORD_HASH: hash,
+        SESSION_SECRET: SECRET,
+      }).HOST,
+    ).toBe('0.0.0.0');
   });
 });

@@ -10,7 +10,7 @@ import { GoogleCalendarSource } from '../google/calendar-source';
 import { buildAuthUrl, GOOGLE_SCOPES } from '../google/oauth';
 
 /**
- * Guards for "Google and Canvas are read-only" and "Google Tasks is gone". They scan every tracked
+ * Guards for "Google and Canvas are read-only" and "the removed Google to-do integration is gone". They scan every tracked
  * file, so a write path or a stray reference added anywhere fails the build.
  */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -36,7 +36,7 @@ const HISTORY_DOCS = new Set([
   'docs/COMPLETION-REPORT.md',
 ]);
 
-describe('Google Tasks is fully removed', () => {
+describe('the removed Google to-do integration', () => {
   it.each(GOOGLE_TASKS_PATTERNS)('no tracked file contains %j', (needle) => {
     expect(tracked.filter((f) => read(f).includes(needle))).toEqual([]);
   });

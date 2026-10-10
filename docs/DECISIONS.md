@@ -204,7 +204,7 @@ needs_clarification | off_topic`. `off_topic` was added beyond the original brie
   volume, then drops to `node` via `setpriv`.
 - **Access**: `AUTH_MODE=password` (scrypt N=2^15 hash, HMAC-signed stateless session cookie,
   HttpOnly/Secure/SameSite=Lax, 5 logins/15 min/IP) or `cloudflare` (verify the Access JWT with
-  `jose` against the team JWKS). Public: `/webhooks/*` (signed, 60 req/min/IP), `/healthz`.
+  `jose` against the team JWKS). Public: `/webhooks/*` (signed, 60 req/min/IP), `/health` (60 req/min/IP).
   Production refuses to boot without auth, an https `PUBLIC_BASE_URL`, and a token-encryption key.
 - **Headers**: strict CSP (`script-src 'self'`; `style-src 'unsafe-inline'` only because Motion
   animates via style attributes), HSTS, `X-Frame-Options: DENY`, nosniff, `Referrer-Policy:

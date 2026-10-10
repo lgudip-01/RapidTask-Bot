@@ -17,11 +17,14 @@ export interface SecurityConfig {
   /** Trust Fly-Client-IP / X-Forwarded-* (only behind a proxy that sets them). */
   trustProxy: boolean;
   webhookRateLimitPerMin: number;
+  /** Per-IP limit for the public /health route (default 60). */
+  healthRateLimitPerMin?: number;
   now?: () => number;
 }
 
 /** Paths reachable without a session. Webhooks authenticate with provider signatures instead. */
-export const PUBLIC_PATHS = [/^\/webhooks\//, /^\/healthz$/, /^\/login$/, /^\/auth\/login$/];
+/** /login and /auth/login exist only in password mode (rate limited); they reveal nothing. */
+export const PUBLIC_PATHS = [/^\/webhooks\//, /^\/health$/, /^\/login$/, /^\/auth\/login$/];
 const isPublic = (path: string) => PUBLIC_PATHS.some((re) => re.test(path));
 
 export const SESSION_COOKIE = 'planner_session';
@@ -117,9 +120,9 @@ export function requireAuth(auth: AuthConfig, now: () => number = Date.now): Mid
         ? verifySession(auth.sessionSecret, getCookie(c, SESSION_COOKIE), now())
         : await auth.verify(c.req.header('cf-access-jwt-assertion'));
     if (ok) return next();
-    if (c.req.path.startsWith('/api/') || auth.mode === 'cloudflare') {
-      return c.json({ error: 'unauthorized' }, auth.mode === 'cloudflare' ? 403 : 401);
-    }
+    if (c.req.path.startsWith('/api/')) return c.json({ error: 'unauthorized' }, 401);
+    // Behind Cloudflare Access there is no login page to send people to.
+    if (auth.mode === 'cloudflare') return c.json({ error: 'unauthorized' }, 403);
     const next_ = encodeURIComponent(c.req.path);
     return c.redirect(`/login?next=${next_}`, 302);
   };

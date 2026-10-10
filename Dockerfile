@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8080 \
+    HOST=0.0.0.0 \
     DATABASE_PATH=/data/planner.db \
     TOKEN_STORE=file \
     TOKEN_FILE_PATH=/data/tokens.enc.json \
@@ -61,6 +62,6 @@ COPY --chmod=0755 deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 # Starts as root only to fix volume ownership, then drops to the unprivileged `node` user.
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

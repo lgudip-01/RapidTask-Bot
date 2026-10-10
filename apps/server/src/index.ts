@@ -133,6 +133,7 @@ const security: SecurityConfig | undefined =
         publicOrigin: env.PUBLIC_BASE_URL ? new URL(env.PUBLIC_BASE_URL).origin : undefined,
         trustProxy: env.TRUST_PROXY,
         webhookRateLimitPerMin: env.WEBHOOK_RATE_LIMIT_PER_MIN,
+        healthRateLimitPerMin: env.HEALTH_RATE_LIMIT_PER_MIN,
       };
 log.info('access control', { auth: env.AUTH_MODE, webUi: Boolean(env.WEB_DIST_DIR) });
 
@@ -178,8 +179,13 @@ const app = createApp({
 scheduler.start();
 void backups.start();
 inbound?.poller?.start();
-serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  log.info('server listening', { port: info.port, env: env.NODE_ENV, sources: sources.length });
+serve({ fetch: app.fetch, port: env.PORT, hostname: env.HOST }, (info) => {
+  log.info('server listening', {
+    host: info.address,
+    port: info.port,
+    env: env.NODE_ENV,
+    sources: sources.length,
+  });
 });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
