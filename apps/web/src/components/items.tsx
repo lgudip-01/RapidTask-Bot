@@ -2,6 +2,7 @@ import type { CalendarEvent, SubmissionStatus, Task } from '@planner/shared';
 import { ExternalLink, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
+import { openItem } from '../lib/itemDialog';
 import { useUpdateTask } from '../lib/queries';
 import { fmtDay, fmtTime, todayLocal } from '../lib/time';
 import { dateInZone } from '@planner/shared';
@@ -58,7 +59,15 @@ export function TaskRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cx('relative truncate text-sm transition-colors', done && 'text-faint')}>
+          <button
+            type="button"
+            onClick={() => openItem({ kind: 'task', task })}
+            aria-label={`Details: ${task.title}`}
+            className={cx(
+              'relative truncate text-left text-sm transition-colors hover:underline',
+              done && 'text-faint',
+            )}
+          >
             {task.title}
             <motion.span
               aria-hidden
@@ -67,7 +76,7 @@ export function TaskRow({
               animate={{ scaleX: done ? 1 : 0 }}
               transition={{ duration: 0.25 }}
             />
-          </span>
+          </button>
           {task.status === 'doing' && (
             <span className="rounded bg-accent-soft px-1.5 text-[10px] font-medium text-accent">
               doing
@@ -128,7 +137,14 @@ export function EventRow({ event, now }: { event: CalendarEvent; now: Date }) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{event.title}</span>
+          <button
+            type="button"
+            onClick={() => openItem({ kind: 'event', event })}
+            aria-label={`Details: ${event.title}`}
+            className="truncate text-left text-sm font-medium hover:underline"
+          >
+            {event.title}
+          </button>
           {live && (
             <motion.span
               className="rounded bg-accent px-1.5 text-[10px] font-semibold text-white"

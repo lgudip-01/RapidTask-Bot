@@ -12,11 +12,14 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useRef, useState } from 'react';
 import { Dialog } from './components/Dialog';
+import { ItemDialog } from './components/ItemDialog';
 import { QuickAdd } from './components/QuickAdd';
 import { SearchDialog } from './components/SearchDialog';
 import { Toaster } from './components/Toaster';
-import { cx, Kbd } from './components/ui';
+import { Button, cx, Kbd } from './components/ui';
 import { applyTheme, readThemePref, useHotkeys, useView, type View } from './lib/hooks';
+import { openItem } from './lib/itemDialog';
+import { useLiveUpdates } from './lib/live';
 import { useSuggestions } from './lib/queries';
 import { SettingsView } from './views/SettingsView';
 import { SuggestionsView } from './views/SuggestionsView';
@@ -40,6 +43,7 @@ export function App() {
   const suggestions = useSuggestions();
   const quickAddRef = useRef<HTMLInputElement>(null);
   const pending = suggestions.data?.length ?? 0;
+  const live = useLiveUpdates();
 
   useHotkeys(
     {
@@ -115,6 +119,30 @@ export function App() {
             ))}
           </nav>
           <div className="flex items-center gap-1">
+            <span
+              role="status"
+              title={
+                live === 'live'
+                  ? 'Live: new items appear automatically'
+                  : live === 'polling'
+                    ? 'Refreshing every 30 seconds'
+                    : 'Reconnecting…'
+              }
+              className="mr-1 inline-flex items-center gap-1.5 text-[11px] text-muted"
+            >
+              <motion.span
+                aria-hidden
+                className={cx(
+                  'size-2 rounded-full',
+                  live === 'live' ? 'bg-ok' : live === 'polling' ? 'bg-muted' : 'bg-warn',
+                )}
+                animate={live === 'live' ? { opacity: [1, 0.4, 1] } : { opacity: 1 }}
+                transition={live === 'live' ? { duration: 2.4, repeat: Infinity } : {}}
+              />
+              <span className="sr-only lg:not-sr-only">
+                {live === 'live' ? 'Live' : live === 'polling' ? 'Auto-refresh' : 'Reconnecting'}
+              </span>
+            </span>
             <button
               onClick={() => setSearching(true)}
               className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm text-muted hover:bg-surface-2 hover:text-ink"
@@ -175,12 +203,37 @@ export function App() {
       <Dialog open={adding} onClose={() => setAdding(false)} label="New task or event">
         <div className="p-4">
           <p className="mb-2 text-xs text-muted">
-            Type naturally. Times go to your calendar; dates and deadlines become tasks.
+            Type naturally: anything with a time becomes a Planner event, deadlines become Planner
+            tasks. Saved only in Planner; nothing is sent to Google.
           </p>
           <QuickAdd autoFocus onAdded={() => setAdding(false)} />
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+            Or fill in a form:
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setAdding(false);
+                openItem({ kind: 'new-event' });
+              }}
+            >
+              New event
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setAdding(false);
+                openItem({ kind: 'new-task' });
+              }}
+            >
+              New task
+            </Button>
+          </div>
         </div>
       </Dialog>
       <SearchDialog open={searching} onClose={() => setSearching(false)} />
+      <ItemDialog />
       <Toaster />
     </div>
   );

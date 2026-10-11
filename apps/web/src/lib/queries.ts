@@ -1,4 +1,12 @@
-import type { AgendaResponse, Settings, Task, TaskPatch } from '@planner/shared';
+import type {
+  AgendaResponse,
+  EventPatch,
+  NewEvent,
+  NewTask,
+  Settings,
+  Task,
+  TaskPatch,
+} from '@planner/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import { toast } from './toast';
@@ -10,6 +18,13 @@ export const keys = {
   settings: ['settings'] as const,
   integrations: ['integrations'] as const,
   courses: (grades: boolean) => ['courses', grades] as const,
+  backups: ['backups'] as const,
+};
+
+/** Agenda and task lists, after any change to items. */
+const refreshItems = (qc: ReturnType<typeof useQueryClient>) => {
+  void qc.invalidateQueries({ queryKey: keys.tasks });
+  void qc.invalidateQueries({ queryKey: ['agenda'] });
 };
 
 export const useAgenda = (from: Date, to: Date, includeOverdue = false) =>
@@ -96,13 +111,65 @@ export function useCapture() {
       if (res.created) {
         toast.success(
           `Added ${res.created.kind === 'event' ? 'event' : 'task'}: ${res.created.title}`,
-          res.created.fallbackNote ?? undefined,
         );
         void qc.invalidateQueries({ queryKey: keys.tasks });
         void qc.invalidateQueries({ queryKey: ['agenda'] });
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not add'),
+  });
+}
+
+export function useCreateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (t: NewTask) => api.createTask(t),
+    onSuccess: (res) => toast.success(`Added task: ${res.task.title}`),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not add'),
+    onSettled: () => refreshItems(qc),
+  });
+}
+
+export function useCreateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (e: NewEvent) => api.createEvent(e),
+    onSuccess: (res) => toast.success(`Added event: ${res.event.title}`),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not add'),
+    onSettled: () => refreshItems(qc),
+  });
+}
+
+export function useUpdateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: EventPatch }) => api.updateEvent(id, patch),
+    onSuccess: () => toast.success('Event saved'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not save'),
+    onSettled: () => refreshItems(qc),
+  });
+}
+
+export function useDeleteEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteEvent(id),
+    onSuccess: () => toast.success('Event deleted'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Delete failed'),
+    onSettled: () => refreshItems(qc),
+  });
+}
+
+export const useBackups = () =>
+  useQuery({ queryKey: keys.backups, queryFn: () => api.backups(), refetchInterval: 60_000 });
+
+export function useRunBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.runBackup(),
+    onSuccess: () => toast.success('Backup complete'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Backup failed'),
+    onSettled: () => void qc.invalidateQueries({ queryKey: keys.backups }),
   });
 }
 

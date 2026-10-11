@@ -1,6 +1,7 @@
-import type { IntegrationStatus } from '@planner/shared';
+import type { BackupStatusDto, IntegrationStatus } from '@planner/shared';
 import {
   CalendarDays,
+  DatabaseBackup,
   GraduationCap,
   MessageCircle,
   Monitor,
@@ -17,14 +18,16 @@ import { api } from '../lib/api';
 import { Button, cx, ErrorState, Kbd, LoadingRows, Segmented, Switch } from '../components/ui';
 import { applyTheme, readThemePref, type ThemePref } from '../lib/hooks';
 import {
+  useBackups,
   useCourses,
   useDisconnectGoogle,
   useIntegrations,
   usePatchSettings,
+  useRunBackup,
   useSettings,
   useSyncNow,
 } from '../lib/queries';
-import { relative } from '../lib/time';
+import { fmtDay, fmtTime, relative } from '../lib/time';
 
 const ICONS: Record<IntegrationStatus['id'], ReactNode> = {
   google_calendar: <CalendarDays className="size-4" />,
@@ -82,6 +85,102 @@ function TimeField({
         className="rounded-md border border-line bg-surface-2 px-2 py-1 text-sm text-ink"
       />
     </label>
+  );
+}
+
+const BACKUP_HEALTH: Record<BackupStatusDto['health'], [string, string]> = {
+  ok: ['healthy', 'bg-ok-soft text-ok'],
+  never: ['no backup yet', 'bg-warn-soft text-warn'],
+  stale: ['older than 48 h', 'bg-danger-soft text-danger'],
+  failed: ['last backup failed', 'bg-danger-soft text-danger'],
+};
+
+const kb = (n: number) =>
+  n < 1024 * 1024
+    ? `${Math.max(1, Math.round(n / 1024))} KB`
+    : `${(n / 1024 / 1024).toFixed(1)} MB`;
+
+function BackupsCard() {
+  const q = useBackups();
+  const run = useRunBackup();
+  const s = q.data?.status;
+  const recent = q.data?.recent ?? [];
+  return (
+    <Card title="Backups">
+      {q.isLoading && <LoadingRows rows={2} />}
+      {q.error && <ErrorState error={q.error} onRetry={() => q.refetch()} />}
+      {s && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="mt-0.5 text-muted">
+              <DatabaseBackup className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Last backup</span>
+                <span
+                  className={cx(
+                    'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                    BACKUP_HEALTH[s.health][1],
+                  )}
+                >
+                  {BACKUP_HEALTH[s.health][0]}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-muted" data-testid="last-backup">
+                {s.lastSuccessAt
+                  ? `${relative(s.lastSuccessAt)} (${fmtDay(s.lastSuccessAt)}, ${fmtTime(s.lastSuccessAt)})${s.lastSizeBytes != null ? ` · ${kb(s.lastSizeBytes)}` : ''}`
+                  : 'Never'}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                {s.enabled && s.nextScheduledAt
+                  ? `Next nightly backup: ${fmtDay(s.nextScheduledAt)}, ${fmtTime(s.nextScheduledAt)} · keeps the newest ${s.keep}`
+                  : 'Nightly backups are off (BACKUP_ENABLED=false).'}
+              </p>
+              {s.health === 'failed' && s.lastError && (
+                <p className="mt-1 rounded-md bg-danger-soft px-2 py-1 font-mono text-[11px] text-danger">
+                  {s.lastError}
+                </p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="subtle"
+              onClick={() => run.mutate()}
+              disabled={run.isPending || s.running}
+            >
+              {run.isPending || s.running ? 'Backing up…' : 'Back up now'}
+            </Button>
+          </div>
+          {recent.length > 0 && (
+            <ul
+              className="space-y-1 border-t border-line pt-2 text-xs text-muted"
+              aria-label="Recent backups"
+            >
+              {recent.slice(0, 5).map((r) => (
+                <li key={r.id} className="flex items-center gap-2">
+                  <span className={r.ok ? 'text-ok' : 'text-danger'}>{r.ok ? '✓' : '✗'}</span>
+                  <span>
+                    {fmtDay(r.startedAt)}, {fmtTime(r.startedAt)}
+                  </span>
+                  <span className="text-faint">{r.reason}</span>
+                  {r.ok && r.taskCount != null && (
+                    <span className="text-faint">
+                      {r.taskCount} tasks · {r.eventCount} events
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-muted">
+            Backups hold everything that lives only in Planner. To restore one, stop the server and
+            run <code className="rounded bg-surface-2 px-1">npm run restore -- --list</code> (see
+            docs/MANUAL-STEPS.md).
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -324,6 +423,8 @@ export function SettingsView() {
           )}
         </div>
       </Card>
+
+      <BackupsCard />
 
       <Card title="Appearance">
         <Segmented

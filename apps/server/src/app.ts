@@ -105,7 +105,16 @@ export function createApp(deps: AppDeps) {
   app.use('/api/*', async (c, next) => {
     await next();
     if (c.req.method !== 'GET' && c.req.method !== 'HEAD' && c.res.status < 400) {
-      deps.changes?.emit(c.req.path.startsWith('/api/suggestions') ? 'suggestions' : 'items');
+      const p = c.req.path;
+      deps.changes?.emit(
+        p.startsWith('/api/suggestions')
+          ? 'suggestions'
+          : p.startsWith('/api/settings')
+            ? 'settings'
+            : p.startsWith('/api/backups')
+              ? 'backup'
+              : 'items',
+      );
     }
   });
 

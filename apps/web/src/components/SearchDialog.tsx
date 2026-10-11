@@ -3,6 +3,7 @@ import { CalendarDays, ListTodo, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { openItem } from '../lib/itemDialog';
 import { useDebounced } from '../lib/hooks';
 import { fmtDay, fmtTime } from '../lib/time';
 import { Dialog } from './Dialog';
@@ -57,7 +58,20 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
               ) : (
                 <ListTodo className="size-4 text-faint" aria-hidden />
               )}
-              <span className="flex-1 truncate text-sm">{i.item.title}</span>
+              <button
+                type="button"
+                className="flex-1 truncate text-left text-sm hover:underline"
+                onClick={() => {
+                  onClose();
+                  openItem(
+                    i.kind === 'event'
+                      ? { kind: 'event', event: i.item }
+                      : { kind: 'task', task: i.item },
+                  );
+                }}
+              >
+                {i.item.title}
+              </button>
               <span className="text-xs text-muted">
                 {i.kind === 'event'
                   ? `${fmtDay(i.item.start)}${i.item.allDay ? '' : `, ${fmtTime(i.item.start)}`}`

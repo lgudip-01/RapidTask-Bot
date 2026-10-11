@@ -1,31 +1,41 @@
 import type { Source } from '@planner/shared';
-import { RefreshCw, TriangleAlert } from 'lucide-react';
+import { Lock, RefreshCw, TriangleAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-export const SOURCE_META: Record<Source, { label: string; short: string }> = {
-  google_calendar: { label: 'Google Calendar', short: 'GCal' },
-  canvas: { label: 'Canvas', short: 'Canvas' },
-  local: { label: 'Planner', short: 'Local' },
+export const SOURCE_META: Record<
+  Source,
+  { label: string; short: string; readOnly: boolean; note: string }
+> = {
+  google_calendar: { label: 'Google Calendar', short: 'Google', readOnly: true, note: 'read-only' },
+  canvas: { label: 'Canvas', short: 'Canvas', readOnly: true, note: 'read-only' },
+  local: { label: 'Planner', short: 'Planner', readOnly: false, note: 'only in this app' },
 };
 export const sourceColor = (s: Source) => `var(--src-${s})`;
 
 export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(' ');
 
-/** Colored dot + optional label. Color is paired with text so it is never the only cue. */
+/**
+ * Colored dot + label, and a lock on read-only sources. Color is paired with text so it is never
+ * the only cue.
+ */
 export function SourceBadge({ source, compact = false }: { source: Source; compact?: boolean }) {
+  const m = SOURCE_META[source];
   return (
     <span
       className="inline-flex items-center gap-1.5 text-xs text-muted"
-      title={SOURCE_META[source].label}
+      title={`${m.label} · ${m.note}`}
     >
       <span
         aria-hidden
         className="size-2 rounded-full"
         style={{ background: sourceColor(source) }}
       />
-      {!compact && SOURCE_META[source].short}
-      {compact && <span className="sr-only">{SOURCE_META[source].label}</span>}
+      {!compact && m.short}
+      {m.readOnly && <Lock aria-hidden className="size-3 text-faint" />}
+      <span className="sr-only">
+        {compact && m.label} ({m.note})
+      </span>
     </span>
   );
 }
@@ -41,6 +51,7 @@ export function Legend({ sources = ['google_calendar', 'canvas', 'local'] as Sou
             style={{ background: sourceColor(s) }}
           />
           {SOURCE_META[s].label}
+          <span className="text-faint">· {SOURCE_META[s].note}</span>
         </li>
       ))}
     </ul>
@@ -212,6 +223,7 @@ export function Segmented<T extends string>({
       {options.map((o) => (
         <button
           key={o.value}
+          type="button"
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}

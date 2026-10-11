@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, cx, ErrorState, Kbd, Legend, Skeleton, sourceColor } from '../components/ui';
 import { useHotkeys, useNow } from '../lib/hooks';
+import { openItem } from '../lib/itemDialog';
 import { layoutDay } from '../lib/layout';
 import { useAgenda } from '../lib/queries';
 import {
@@ -141,14 +142,17 @@ export function WeekView() {
                   <div key={d} className="min-h-8 space-y-1 border-l border-line p-1">
                     {agenda.isLoading && <Skeleton className="h-5" />}
                     {tasksByDay(d).map((t) => (
-                      <motion.div
+                      <motion.button
+                        type="button"
+                        onClick={() => openItem({ kind: 'task', task: t })}
+                        aria-label={`Details: ${t.title}`}
                         key={t.id}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         whileHover={{ y: -1 }}
                         title={`${t.title}${t.dueAllDay ? '' : ` · due ${fmtTime(t.due!)}`}`}
                         className={cx(
-                          'flex items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-[11px]',
+                          'flex w-full items-center gap-1 truncate rounded-md border px-1.5 py-0.5 text-left text-[11px]',
                           t.status === 'done'
                             ? 'border-line text-faint line-through'
                             : 'border-line bg-bg',
@@ -160,7 +164,7 @@ export function WeekView() {
                           style={{ background: sourceColor(t.source) }}
                         />
                         <span className="truncate">{t.title}</span>
-                      </motion.div>
+                      </motion.button>
                     ))}
                   </div>
                 ))}
@@ -168,7 +172,10 @@ export function WeekView() {
               {bars.length > 0 && (
                 <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] gap-y-1 border-b border-line py-1">
                   {bars.map(({ e, first, last }) => (
-                    <motion.div
+                    <motion.button
+                      type="button"
+                      onClick={() => openItem({ kind: 'event', event: e })}
+                      aria-label={`Details: ${e.title}`}
                       key={e.id}
                       initial={{ opacity: 0, scaleX: 0.9 }}
                       animate={{ opacity: 1, scaleX: 1 }}
@@ -177,11 +184,11 @@ export function WeekView() {
                         background: `color-mix(in srgb, ${sourceColor(e.source)} 16%, transparent)`,
                         borderColor: sourceColor(e.source),
                       }}
-                      className="mx-1 truncate rounded-md border-l-[3px] px-2 py-0.5 text-[11px] font-medium"
+                      className="mx-1 truncate rounded-md border-l-[3px] px-2 py-0.5 text-left text-[11px] font-medium"
                       title={e.title}
                     >
                       {e.title}
-                    </motion.div>
+                    </motion.button>
                   ))}
                 </div>
               )}
@@ -225,13 +232,16 @@ export function WeekView() {
                           const e = p.item;
                           const height = Math.max(((p.end - p.start) / 60) * HOUR_PX - 2, 18);
                           return (
-                            <motion.div
+                            <motion.button
+                              type="button"
+                              onClick={() => openItem({ kind: 'event', event: e })}
+                              aria-label={`Details: ${e.title}`}
                               key={e.id}
                               initial={{ opacity: 0, y: 4 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: idx * 0.02 }}
                               whileHover={{ scale: 1.02, zIndex: 10 }}
-                              className="absolute overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-[11px] leading-tight shadow-sm"
+                              className="absolute overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm"
                               style={{
                                 top: (p.start / 60) * HOUR_PX + 1,
                                 height,
@@ -249,7 +259,7 @@ export function WeekView() {
                                   {e.location ? ` · ${e.location}` : ''}
                                 </div>
                               )}
-                            </motion.div>
+                            </motion.button>
                           );
                         })}
                         {isToday && (

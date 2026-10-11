@@ -8,7 +8,11 @@ import {
   SyncStatusSchema,
   TaskSchema,
   AgendaItemSchema,
+  BackupsResponseSchema,
+  CalendarEventSchema,
   type AcceptSuggestion,
+  type EventPatch,
+  type NewEvent,
   type NewTask,
   type Settings,
   type TaskPatch,
@@ -50,12 +54,12 @@ async function request<T>(schema: z.ZodType<T>, url: string, init?: RequestInit)
 
 const send = (body: unknown) => ({ body: JSON.stringify(body) });
 const TaskEnvelope = z.object({ task: TaskSchema });
+const EventEnvelope = z.object({ event: CalendarEventSchema });
 const Created = z
   .object({
     kind: z.enum(['task', 'event']),
     title: z.string(),
     source: z.string(),
-    fallbackNote: z.string().nullable(),
   })
   .passthrough();
 
@@ -71,6 +75,17 @@ export const api = {
   updateTask: (id: string, patch: TaskPatch) =>
     request(TaskEnvelope, `/api/tasks/${id}`, { method: 'PATCH', ...send(patch) }),
   deleteTask: (id: string) => request(z.null(), `/api/tasks/${id}`, { method: 'DELETE' }),
+
+  /** Planner-only events (Google and Canvas events are read-only). */
+  createEvent: (e: NewEvent) =>
+    request(EventEnvelope, '/api/events', { method: 'POST', ...send(e) }),
+  updateEvent: (id: string, patch: EventPatch) =>
+    request(EventEnvelope, `/api/events/${id}`, { method: 'PATCH', ...send(patch) }),
+  deleteEvent: (id: string) => request(z.null(), `/api/events/${id}`, { method: 'DELETE' }),
+
+  backups: () => request(BackupsResponseSchema, '/api/backups'),
+  runBackup: () =>
+    request(z.object({ ok: z.boolean() }).passthrough(), '/api/backups/run', { method: 'POST' }),
 
   parse: (text: string) =>
     request(z.object({ preview: ParsePreviewSchema }), '/api/parse', {
