@@ -204,6 +204,8 @@ const labelCls = 'block text-xs font-medium text-muted';
 /** Canvas address + personal access token. The server checks them with Canvas before saving. */
 function CanvasConnectForm({ onDone }: { onDone: () => void }) {
   const connect = useConnectCanvas();
+  const [mode, setMode] = useState<'feed' | 'token'>('feed');
+  const [feedUrl, setFeedUrl] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [token, setToken] = useState('');
   const host = baseUrl
@@ -217,50 +219,91 @@ function CanvasConnectForm({ onDone }: { onDone: () => void }) {
       aria-label="Connect Canvas"
       onSubmit={(e) => {
         e.preventDefault();
-        connect.mutate({ baseUrl, token }, { onSuccess: onDone });
+        connect.mutate(mode === 'feed' ? { feedUrl } : { baseUrl, token }, { onSuccess: onDone });
       }}
     >
-      <label className={labelCls}>
-        Canvas address
-        <input
-          className={field}
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          placeholder="yourschool.instructure.com"
-          autoComplete="url"
-          inputMode="url"
-          required
-          autoFocus
-        />
-      </label>
-      <label className={labelCls}>
-        Access token
-        <input
-          className={field}
-          type="password"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="Paste the token from Canvas"
-          autoComplete="off"
-          required
-        />
-      </label>
-      <p className="text-xs text-muted">
-        In Canvas, open{' '}
-        {tokenPage ? (
-          <a
-            className="text-accent-ink underline"
-            href={tokenPage}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Account → Settings
-          </a>
-        ) : (
-          <span className="text-ink">Account → Settings</span>
-        )}
-        , choose <span className="text-ink">+ New Access Token</span>, name it “Planner”, and copy
-        the token. Planner only reads from Canvas and keeps the token encrypted.
+      <Segmented
+        id="canvas-connect-mode"
+        label="How to connect"
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          connect.reset();
+        }}
+        options={[
+          { value: 'feed', label: 'Calendar feed' },
+          { value: 'token', label: 'Access token' },
+        ]}
+      />
+      {mode === 'feed' ? (
+        <>
+          <label className={labelCls}>
+            Calendar feed link
+            <input
+              className={field}
+              value={feedUrl}
+              onChange={(e) => setFeedUrl(e.target.value)}
+              placeholder="https://yourschool.instructure.com/feeds/calendars/user_….ics"
+              autoComplete="off"
+              inputMode="url"
+              required
+              autoFocus
+            />
+          </label>
+          <p className="text-xs text-muted">
+            In Canvas, open <span className="text-ink">Calendar</span>, click{' '}
+            <span className="text-ink">Calendar Feed</span> (bottom right), and copy the link. You
+            get assignments and course events. Treat the link like a password.
+          </p>
+        </>
+      ) : (
+        <>
+          <label className={labelCls}>
+            Canvas address
+            <input
+              className={field}
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="yourschool.instructure.com"
+              autoComplete="url"
+              inputMode="url"
+              required
+              autoFocus
+            />
+          </label>
+          <label className={labelCls}>
+            Access token
+            <input
+              className={field}
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Paste the token from Canvas"
+              autoComplete="off"
+              required
+            />
+          </label>
+          <p className="text-xs text-muted">
+            In Canvas, open{' '}
+            {tokenPage ? (
+              <a
+                className="text-accent-ink underline"
+                href={tokenPage}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Account → Settings
+              </a>
+            ) : (
+              <span className="text-ink">Account → Settings</span>
+            )}
+            , choose <span className="text-ink">+ New Access Token</span>, name it “Planner”, and
+            copy the token. Adds grades and announcements to what the feed gives you.
+          </p>
+        </>
+      )}
+      <p className="text-xs text-faint">
+        Planner only reads from Canvas and keeps these details encrypted.
       </p>
       {connect.error && (
         <p role="alert" className="rounded-md bg-danger-soft px-2 py-1 text-xs text-danger">

@@ -6,6 +6,7 @@ import {
   type Course,
 } from '@planner/shared';
 import { CanvasApiError } from '@planner/canvas';
+import { CanvasFeedError } from '../canvas/connection';
 import { asc, desc, gte } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -20,6 +21,14 @@ const AnnouncementsQuery = z.object({ since: IsoDateTime.optional() });
 
 /** What the owner sees when a connection attempt fails (never the token or Canvas's body). */
 function connectError(e: unknown): { status: 400 | 502; message: string } {
+  if (e instanceof CanvasFeedError) {
+    return {
+      status: 400,
+      message: e.status
+        ? 'Canvas did not accept that calendar feed link. Copy it again from Calendar → Calendar Feed.'
+        : 'That link is not a calendar feed. In Canvas, open Calendar → Calendar Feed and copy the link.',
+    };
+  }
   if (e instanceof CanvasApiError) {
     if (e.status === 401)
       return {
@@ -33,7 +42,7 @@ function connectError(e: unknown): { status: 400 | 502; message: string } {
       message: `Canvas answered with an error (${e.status}). Try again later.`,
     };
   }
-  if (e instanceof Error && /https|Canvas address/.test(e.message))
+  if (e instanceof Error && /https|Canvas address|access token/.test(e.message))
     return { status: 400, message: e.message };
   return { status: 400, message: 'Could not reach that address. Check the Canvas URL.' };
 }
@@ -51,11 +60,15 @@ export function canvasRoutes({ db, now, canvas, background }: AppDeps) {
     .post('/canvas/connect', async (c) => {
       if (!canvas?.connect) return c.json({ error: 'canvas_connect_unavailable' }, 503);
       const body = CanvasConnectSchema.safeParse(await readJson(c));
-      if (!body.success) return badRequest(c, body.error);
+      if (!body.success) {
+        // Shown as-is in the Connect Canvas form.
+        const message = body.error.issues[0]?.message ?? 'Check the Canvas details';
+        return c.json({ error: 'invalid_request', message }, 400);
+      }
       try {
-        const { name, firstSync } = await canvas.connect(body.data);
+        const { name, kind, firstSync } = await canvas.connect(body.data);
         if (background) background(firstSync);
-        return c.json({ connected: true, name });
+        return c.json({ connected: true, name, kind });
       } catch (e) {
         const err = connectError(e);
         log.warn('canvas connect failed', { error: sanitizeError(e) });

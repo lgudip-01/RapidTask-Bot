@@ -297,18 +297,38 @@ export const IntegrationStatusSchema = z.object({
 export type IntegrationStatus = z.infer<typeof IntegrationStatusSchema>;
 
 /** POST /api/canvas/connect: your Canvas address and a personal access token (read-only use). */
-export const CanvasConnectSchema = z.object({
-  /** e.g. "school.instructure.com" or a full https:// URL; the server keeps only the origin. */
-  baseUrl: z
-    .string()
-    .trim()
-    .max(200)
-    .refine(
-      (s) => /^(https?:\/\/)?[^\s/]+\.[^\s/]+/i.test(s),
-      "Enter your school's Canvas address, like school.instructure.com",
-    ),
-  token: z.string().trim().min(20, 'That token looks too short').max(300),
-});
+const CANVAS_FEED = /\/feeds\/calendars\/[^/\s]+\.ics\b/i;
+
+/**
+ * POST /api/canvas/connect: either a calendar feed link (Canvas → Calendar → Calendar Feed), or
+ * your Canvas address and a personal access token. A feed link pasted into any field counts.
+ */
+export const CanvasConnectSchema = z
+  .object({
+    feedUrl: z.string().trim().max(500).optional(),
+    /** e.g. "school.instructure.com" or a full https:// URL; the server keeps only the origin. */
+    baseUrl: z.string().trim().max(500).optional(),
+    token: z.string().trim().max(500).optional(),
+  })
+  .superRefine((b, ctx) => {
+    if ([b.feedUrl, b.baseUrl, b.token].some((s) => s && CANVAS_FEED.test(s))) return;
+    if (b.feedUrl) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['feedUrl'],
+        message: 'That is not a Canvas calendar feed link (it ends in .ics)',
+      });
+      return;
+    }
+    if (!b.baseUrl || !/^(https?:\/\/)?[^\s/]+\.[^\s/]+/i.test(b.baseUrl))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['baseUrl'],
+        message: "Enter your school's Canvas address, like school.instructure.com",
+      });
+    if (!b.token || b.token.length < 20)
+      ctx.addIssue({ code: 'custom', path: ['token'], message: 'That token looks too short' });
+  });
 export type CanvasConnect = z.infer<typeof CanvasConnectSchema>;
 
 /** GET /api/canvas/connection */

@@ -6,7 +6,9 @@ import type { SyncSource } from '../sync/types';
 import {
   CANVAS_CONNECTION_KEY,
   CanvasConnectionStore,
+  CanvasFeedError,
   CanvasRegistration,
+  canvasHostOf,
   canvasOrigin,
 } from './connection';
 
@@ -41,8 +43,9 @@ describe('CanvasConnectionStore', () => {
     const conn = new CanvasConnectionStore(store, { fetch: api });
     expect(await conn.connect({ baseUrl: `${CANVAS_BASE}/courses`, token: ` ${TOKEN} ` })).toEqual({
       name: 'Test Student',
+      kind: 'rest',
     });
-    expect(await conn.get()).toEqual({ baseUrl: CANVAS_BASE, token: TOKEN });
+    expect(await conn.get()).toEqual({ kind: 'rest', baseUrl: CANVAS_BASE, token: TOKEN });
     // Only a GET to the Canvas host, with the token as a bearer header.
     expect(api.calls.map((c) => [c.url.origin + c.url.pathname, c.authorization])).toEqual([
       [`${CANVAS_BASE}/api/v1/users/self`, `Bearer ${TOKEN}`],
@@ -64,7 +67,7 @@ describe('CanvasRegistration', () => {
     const env = await makeTestEnv([]);
     const store = new MemoryTokenStore();
     const conn = new CanvasConnectionStore(store, { fetch: fakeCanvasApi({ validToken: TOKEN }) });
-    const reg = new CanvasRegistration(conn, env.scheduler, (c) => stubSource(c.baseUrl));
+    const reg = new CanvasRegistration(conn, env.scheduler, (c) => stubSource(canvasHostOf(c)));
 
     expect(await reg.refresh()).toBe(false);
     expect(env.scheduler.has('canvas')).toBe(false);
@@ -92,7 +95,7 @@ describe('Connect Canvas routes', () => {
           return {
             connected: Boolean(c),
             managed: c ? ('app' as const) : null,
-            baseUrl: c?.baseUrl ?? null,
+            baseUrl: c ? canvasHostOf(c) : null,
             canConnect: true,
           };
         },
@@ -118,7 +121,10 @@ describe('Connect Canvas routes', () => {
       baseUrl: 'https://canvas.example.edu/courses',
       token: TOKEN,
     });
-    expect(res).toEqual({ status: 200, body: { connected: true, name: 'Test Student' } });
+    expect(res).toEqual({
+      status: 200,
+      body: { connected: true, name: 'Test Student', kind: 'rest' },
+    });
     expect(s.firstSyncs()).toBe(1);
 
     const status = await s.env.json('GET', '/api/canvas/connection');
@@ -158,5 +164,51 @@ describe('Connect Canvas routes', () => {
     });
     expect(bare.status).toBe(200);
     expect(JSON.parse((await s.store.get(CANVAS_CONNECTION_KEY))!).baseUrl).toBe(CANVAS_BASE);
+  });
+});
+
+describe('Canvas calendar feed', () => {
+  const FEED = 'https://canvas.example.edu/feeds/calendars/user_abcDEF123secret.ics';
+  const ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n';
+  const feedFetch = (body: string, status = 200) => {
+    const calls: string[] = [];
+    const fn = (async (url: string | URL | Request) => {
+      calls.push(String(url));
+      return new Response(body, { status });
+    }) as typeof fetch;
+    return Object.assign(fn, { calls });
+  };
+
+  it('accepts a feed link pasted into any field, including webcal://', async () => {
+    const store = new MemoryTokenStore();
+    const f = feedFetch(ics);
+    const conn = new CanvasConnectionStore(store, {}, f);
+    expect(await conn.connect({ token: FEED.replace('https:', 'webcal:') })).toEqual({
+      name: null,
+      kind: 'ics',
+    });
+    expect(await conn.get()).toEqual({ kind: 'ics', feedUrl: FEED });
+    expect(f.calls).toEqual([FEED]);
+    // Shown as the host only: the feed path is a secret.
+    expect(canvasHostOf((await conn.get())!)).toBe(CANVAS_BASE);
+  });
+
+  it('refuses a link that is not a calendar, and saves nothing', async () => {
+    const store = new MemoryTokenStore();
+    const conn = new CanvasConnectionStore(store, {}, feedFetch('<html>Log in</html>'));
+    await expect(conn.connect({ feedUrl: FEED })).rejects.toBeInstanceOf(CanvasFeedError);
+    const gone = new CanvasConnectionStore(store, {}, feedFetch('', 404));
+    await expect(gone.connect({ feedUrl: FEED })).rejects.toThrow(/404/);
+    expect(await store.get(CANVAS_CONNECTION_KEY)).toBeNull();
+  });
+
+  it('reads connections saved before feeds were supported', async () => {
+    const store = new MemoryTokenStore();
+    await store.set(CANVAS_CONNECTION_KEY, JSON.stringify({ baseUrl: CANVAS_BASE, token: TOKEN }));
+    expect(await new CanvasConnectionStore(store).get()).toEqual({
+      kind: 'rest',
+      baseUrl: CANVAS_BASE,
+      token: TOKEN,
+    });
   });
 });

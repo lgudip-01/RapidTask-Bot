@@ -278,7 +278,11 @@ export function useConnectCanvas() {
   return useMutation({
     mutationFn: api.connectCanvas,
     onSuccess: (res) => {
-      toast.success(`Canvas connected as ${res.name}. Syncing your courses…`);
+      toast.success(
+        res.name
+          ? `Canvas connected as ${res.name}. Syncing your courses…`
+          : 'Canvas calendar feed connected. Syncing your assignments…',
+      );
       refreshCanvas(qc);
       // The first sync runs on the server; pick up its results shortly after.
       setTimeout(() => {

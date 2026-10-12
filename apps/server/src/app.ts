@@ -71,7 +71,9 @@ export interface AppDeps {
   canvas?: {
     connection: () => Promise<CanvasConnection>;
     /** Checks the token with Canvas, saves it, and starts the first sync (`firstSync`). */
-    connect?: (input: CanvasConnect) => Promise<{ name: string; firstSync: Promise<unknown> }>;
+    connect?: (
+      input: CanvasConnect,
+    ) => Promise<{ name: string | null; kind: 'rest' | 'ics'; firstSync: Promise<unknown> }>;
     disconnect?: () => Promise<void>;
   };
   /** Browser-based "Connect Google" (present when GOOGLE_CLIENT_ID/SECRET are set). */

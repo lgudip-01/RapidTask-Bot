@@ -132,10 +132,15 @@ export const api = {
 
   canvasConnection: () => request(CanvasConnectionSchema, '/api/canvas/connection'),
   connectCanvas: (b: CanvasConnect) =>
-    request(z.object({ connected: z.boolean(), name: z.string() }), '/api/canvas/connect', {
-      method: 'POST',
-      ...send(b),
-    }),
+    request(
+      z.object({
+        connected: z.boolean(),
+        name: z.string().nullable(),
+        kind: z.enum(['rest', 'ics']).default('rest'),
+      }),
+      '/api/canvas/connect',
+      { method: 'POST', ...send(b) },
+    ),
   disconnectCanvas: () => request(z.null(), '/api/canvas/disconnect', { method: 'POST' }),
 
   me: () =>

@@ -18,7 +18,7 @@ export function integrationStatus(
     tokenStore: TokenStore | null;
     llmAvailable: boolean;
     /** Canvas connected from Settings, when not configured by environment variables. */
-    canvasApp?: () => Promise<{ baseUrl: string } | null>;
+    canvasApp?: () => Promise<{ baseUrl: string; kind: 'rest' | 'ics' } | null>;
   },
 ) {
   return async (): Promise<IntegrationStatus[]> => {
@@ -38,7 +38,7 @@ export function integrationStatus(
     const canvasEnv =
       env.CANVAS_BASE_URL && env.CANVAS_TOKEN ? 'rest' : env.CANVAS_ICS_URL ? 'ics' : null;
     const canvasApp = canvasEnv ? null : await deps.canvasApp?.().catch(() => null);
-    const canvasMode = canvasEnv ?? (canvasApp ? 'rest' : null);
+    const canvasMode = canvasEnv ?? canvasApp?.kind ?? null;
     const canvasHost = (env.CANVAS_BASE_URL ?? canvasApp?.baseUrl)?.replace(/^https:\/\//, '');
     const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_ALLOWED_USER_ID);
     const twilioConfigured = Boolean(

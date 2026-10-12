@@ -7,10 +7,11 @@ import { CanvasSource } from './canvas/canvas-source';
 import {
   CanvasConnectionStore,
   CanvasRegistration,
+  canvasHostOf,
   type CanvasCredentials,
 } from './canvas/connection';
 import { ChangeBus } from './changes';
-import { createDb } from './db/client';
+import { createDb, toDbUrl } from './db/client';
 import { appOrigins, isServerless, type Env } from './env';
 import { GoogleCalendarClient } from './google/calendar-client';
 import { GoogleCalendarSource } from './google/calendar-source';
@@ -42,7 +43,8 @@ export async function createRuntime(
 ) {
   const serverless = isServerless(env);
   const origins = appOrigins(env);
-  const db = await createDb(env.TURSO_DATABASE_URL ?? env.DATABASE_PATH, env.TURSO_AUTH_TOKEN);
+  const dbUrl = toDbUrl(env.TURSO_DATABASE_URL ?? env.DATABASE_PATH);
+  const db = await createDb(dbUrl, env.TURSO_AUTH_TOKEN);
   const now = () => new Date();
   const settings = new SettingsStore(db, now);
   const sources: SyncSource[] = [];
@@ -81,18 +83,26 @@ export async function createRuntime(
   }
 
   const canvasSource = (c: CanvasCredentials) =>
-    new CanvasSource(new CanvasClient({ baseUrl: c.baseUrl, token: c.token }), {
-      baseUrl: c.baseUrl,
-      appTimeZone: env.APP_TIMEZONE,
-      intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
-      lookbackDays: env.CANVAS_LOOKBACK_DAYS,
-      lookaheadDays: env.CANVAS_LOOKAHEAD_DAYS,
-      includeGrades: env.CANVAS_SYNC_GRADES,
-    });
+    c.kind === 'ics'
+      ? new CanvasIcsSource({
+          feedUrl: c.feedUrl,
+          appTimeZone: env.APP_TIMEZONE,
+          intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
+        })
+      : new CanvasSource(new CanvasClient({ baseUrl: c.baseUrl, token: c.token }), {
+          baseUrl: c.baseUrl,
+          appTimeZone: env.APP_TIMEZONE,
+          intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
+          lookbackDays: env.CANVAS_LOOKBACK_DAYS,
+          lookaheadDays: env.CANVAS_LOOKAHEAD_DAYS,
+          includeGrades: env.CANVAS_SYNC_GRADES,
+        });
   // Server configuration wins; otherwise Canvas is connected from Settings (see below).
   const canvasFromEnv = Boolean((env.CANVAS_BASE_URL && env.CANVAS_TOKEN) || env.CANVAS_ICS_URL);
   if (env.CANVAS_BASE_URL && env.CANVAS_TOKEN) {
-    sources.push(canvasSource({ baseUrl: env.CANVAS_BASE_URL, token: env.CANVAS_TOKEN }));
+    sources.push(
+      canvasSource({ kind: 'rest', baseUrl: env.CANVAS_BASE_URL, token: env.CANVAS_TOKEN }),
+    );
     log.info('canvas enabled', { mode: 'rest' });
   } else if (env.CANVAS_ICS_URL) {
     sources.push(
@@ -234,7 +244,17 @@ export async function createRuntime(
 
   /** One serverless heartbeat: due syncs, then messages, then the nightly backup. */
   async function tick() {
-    const out: Record<string, unknown> = {};
+    // Counts only (no content): lets the owner check that Planner-only items persist.
+    const count = async (table: 'tasks' | 'calendar_events') =>
+      Number(
+        (await db.$client.execute(`SELECT count(*) FROM ${table} WHERE source = 'local'`))
+          .rows[0]?.[0] ?? 0,
+      );
+    const out: Record<string, unknown> = {
+      database: /^file:/i.test(dbUrl) ? 'local-file' : 'hosted',
+      localTasks: await count('tasks'),
+      localEvents: await count('calendar_events'),
+    };
     try {
       await canvasReg?.refresh();
       const runs = await scheduler.runDue();
@@ -270,7 +290,12 @@ export async function createRuntime(
       scheduler,
       tokenStore,
       llmAvailable: Boolean(llm),
-      canvasApp: canvasApp ? () => canvasApp.get() : undefined,
+      canvasApp: canvasApp
+        ? async () => {
+            const c = await canvasApp.get();
+            return c ? { baseUrl: canvasHostOf(c), kind: c.kind } : null;
+          }
+        : undefined,
     }),
     canvas: {
       connection: async () => {
@@ -278,7 +303,7 @@ export async function createRuntime(
         return {
           connected: canvasFromEnv || Boolean(c),
           managed: canvasFromEnv ? ('env' as const) : c ? ('app' as const) : null,
-          baseUrl: env.CANVAS_BASE_URL ?? c?.baseUrl ?? null,
+          baseUrl: env.CANVAS_BASE_URL ?? (c ? canvasHostOf(c) : null),
           canConnect: Boolean(canvasApp),
         };
       },

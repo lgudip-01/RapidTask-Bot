@@ -160,7 +160,8 @@ const EnvSchema = z
     }
     if (e.VERCEL) {
       // Serverless: the local disk is temporary and nothing runs between requests.
-      need('TURSO_DATABASE_URL', e.TURSO_DATABASE_URL);
+      // Only a hosted database survives: Vercel's disk is temporary and wiped between instances.
+      need('TURSO_DATABASE_URL', /^(libsql|https|wss):\/\//i.test(e.TURSO_DATABASE_URL ?? ''));
       need('CRON_SECRET', e.CRON_SECRET);
       need('TOKEN_ENCRYPTION_KEY', e.TOKEN_ENCRYPTION_KEY);
       if (e.TELEGRAM_BOT_TOKEN) {

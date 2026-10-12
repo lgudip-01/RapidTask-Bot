@@ -421,6 +421,7 @@ describe('Settings: Connect Canvas', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.click(await screen.findByRole('button', { name: 'Connect Canvas' }));
     const form = screen.getByRole('form', { name: 'Connect Canvas' });
+    await user.click(within(form).getByRole('radio', { name: 'Access token' }));
     await user.type(within(form).getByLabelText('Canvas address'), 'school.instructure.com');
     expect(
       within(form).getByRole('link', { name: 'Account → Settings' }).getAttribute('href'),
@@ -440,6 +441,26 @@ describe('Settings: Connect Canvas', () => {
     expect(api.calls.filter((c) => c.path === '/api/canvas/connect').at(-1)!.body).toEqual({
       baseUrl: 'school.instructure.com',
       token: '7~bad-token-0123456789abcdef',
+    });
+  });
+
+  it('connects with a calendar feed link by default', async () => {
+    const api = renderApp({
+      ...canvasRow(),
+      'POST /api/canvas/connect': () => ({ connected: true, name: null, kind: 'ics' }),
+    });
+    window.location.hash = '#/settings';
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(await screen.findByRole('button', { name: 'Connect Canvas' }));
+    const form = screen.getByRole('form', { name: 'Connect Canvas' });
+    const feed = 'https://school.instructure.com/feeds/calendars/user_abc123.ics';
+    await user.type(within(form).getByLabelText('Calendar feed link'), feed);
+    await user.click(within(form).getByRole('button', { name: 'Connect' }));
+    expect(
+      await screen.findByText('Canvas calendar feed connected. Syncing your assignments…'),
+    ).toBeTruthy();
+    expect(api.calls.find((c) => c.path === '/api/canvas/connect')!.body).toEqual({
+      feedUrl: feed,
     });
   });
 });
