@@ -1,4 +1,9 @@
-import type { HelloResponse, IntegrationStatus } from '@planner/shared';
+import type {
+  CanvasConnect,
+  CanvasConnection,
+  HelloResponse,
+  IntegrationStatus,
+} from '@planner/shared';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -62,6 +67,13 @@ export interface AppDeps {
   security?: SecurityConfig;
   /** Built web UI to serve (production). */
   webDist?: string;
+  /** Canvas connected from Settings (when not configured by environment variables). */
+  canvas?: {
+    connection: () => Promise<CanvasConnection>;
+    /** Checks the token with Canvas, saves it, and starts the first sync (`firstSync`). */
+    connect?: (input: CanvasConnect) => Promise<{ name: string; firstSync: Promise<unknown> }>;
+    disconnect?: () => Promise<void>;
+  };
   /** Browser-based "Connect Google" (present when GOOGLE_CLIENT_ID/SECRET are set). */
   google?: GoogleConnectDeps;
   /**

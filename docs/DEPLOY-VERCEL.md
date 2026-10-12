@@ -56,8 +56,6 @@ Generate each random value in your own terminal (PowerShell or Git Bash, from th
 | `TELEGRAM_WEBHOOK_SECRET`  | `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`                                      |
 | `GOOGLE_CLIENT_ID`         | step 6                                                                                                                |
 | `GOOGLE_CLIENT_SECRET`     | step 6                                                                                                                |
-| `CANVAS_BASE_URL`          | e.g. `https://yourschool.instructure.com` (optional)                                                                  |
-| `CANVAS_TOKEN`             | Canvas → Account → Settings → New access token (optional)                                                             |
 | `ANTHROPIC_API_KEY`        | optional: lets the bot understand free-form texts                                                                     |
 
 Don't set `NODE_ENV`. On Vercel the production checks always apply, and setting it at build
@@ -119,6 +117,16 @@ the same endpoint as a fallback.
 4. **Audience → Publish app**, so Google doesn't expire the connection after 7 days.
 5. In Planner, open **Settings → Sources → Connect Google** and approve. Planner syncs
    right away and every 10 minutes after that (on the next heartbeat).
+
+## Connect Canvas (read-only)
+
+In Planner, open **Settings → Sources → Connect Canvas**. Enter your school's Canvas address
+(e.g. `school.instructure.com`) and a personal access token: in Canvas, **Account → Settings →
+
+- New Access Token**. Planner checks the token with Canvas, stores it encrypted, and syncs your
+  courses, assignments, events and announcements every 30 minutes (on the heartbeat). Disconnect
+  from the same place. `CANVAS_BASE_URL` and `CANVAS_TOKEN` environment variables still work, and
+  win if set.
 
 ## 7. Backups and restoring
 

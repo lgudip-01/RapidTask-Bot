@@ -291,5 +291,32 @@ export const IntegrationStatusSchema = z.object({
   connected: z.boolean().nullable(),
   sync: SyncStatusSchema.nullable(),
   help: z.string().nullable(),
+  /** Where the connection lives: server environment variables, or connected from the app. */
+  managed: z.enum(['env', 'app']).nullable().default(null),
 });
 export type IntegrationStatus = z.infer<typeof IntegrationStatusSchema>;
+
+/** POST /api/canvas/connect: your Canvas address and a personal access token (read-only use). */
+export const CanvasConnectSchema = z.object({
+  /** e.g. "school.instructure.com" or a full https:// URL; the server keeps only the origin. */
+  baseUrl: z
+    .string()
+    .trim()
+    .max(200)
+    .refine(
+      (s) => /^(https?:\/\/)?[^\s/]+\.[^\s/]+/i.test(s),
+      "Enter your school's Canvas address, like school.instructure.com",
+    ),
+  token: z.string().trim().min(20, 'That token looks too short').max(300),
+});
+export type CanvasConnect = z.infer<typeof CanvasConnectSchema>;
+
+/** GET /api/canvas/connection */
+export const CanvasConnectionSchema = z.object({
+  connected: z.boolean(),
+  managed: z.enum(['env', 'app']).nullable(),
+  baseUrl: z.string().nullable(),
+  /** Whether the app can store a connection here (needs an encryption key or the OS keyring). */
+  canConnect: z.boolean(),
+});
+export type CanvasConnection = z.infer<typeof CanvasConnectionSchema>;

@@ -67,6 +67,21 @@ export class SyncScheduler {
     return this.bySource.has(name);
   }
 
+  /** Adds (or replaces) a source at runtime, e.g. Canvas connected from Settings. */
+  addSource(src: SyncSource) {
+    this.removeSource(src.name);
+    this.bySource.set(src.name, src);
+    if (!this.stopped) this.schedule(src.name, 0);
+  }
+
+  /** Stops scheduling a source. Its stored items and sync state are kept. */
+  removeSource(name: string) {
+    const t = this.timers.get(name);
+    if (t !== undefined) this.clearTimer(t);
+    this.timers.delete(name);
+    this.bySource.delete(name);
+  }
+
   /** Schedules every source, resuming from a persisted `nextRunAt` (so backoff survives restarts). */
   async start() {
     this.stopped = false;
@@ -139,7 +154,7 @@ export class SyncScheduler {
       return { ok: false, error };
     } finally {
       this.running.delete(name);
-      if (!this.stopped) this.schedule(name, delay);
+      if (!this.stopped && this.bySource.has(name)) this.schedule(name, delay);
     }
   }
 

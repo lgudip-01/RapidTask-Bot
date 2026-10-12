@@ -31,7 +31,8 @@ type TestDepKeys =
   | 'cron'
   | 'streaming'
   | 'google'
-  | 'background';
+  | 'background'
+  | 'canvas';
 
 /** Manual clock + timer capture so scheduler tests are deterministic. */
 export async function makeTestEnv(

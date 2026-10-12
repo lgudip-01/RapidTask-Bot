@@ -4,6 +4,11 @@ import { createApp, type AppDeps } from './app';
 import { BackupService, type BackupTarget } from './backup/backup';
 import { CanvasIcsSource } from './canvas/canvas-ics-source';
 import { CanvasSource } from './canvas/canvas-source';
+import {
+  CanvasConnectionStore,
+  CanvasRegistration,
+  type CanvasCredentials,
+} from './canvas/connection';
 import { ChangeBus } from './changes';
 import { createDb } from './db/client';
 import { appOrigins, isServerless, type Env } from './env';
@@ -42,17 +47,21 @@ export async function createRuntime(
   const settings = new SettingsStore(db, now);
   const sources: SyncSource[] = [];
   const changes = new ChangeBus();
-  let tokenStore: TokenStore | null = null;
+  // Encrypted storage for the Google refresh token and a Canvas connection made in Settings.
+  // Optional: without a keyring or TOKEN_ENCRYPTION_KEY, those two features are unavailable.
+  const tokenStore: TokenStore | null = await createTokenStore(
+    { ...env, TOKEN_STORE: serverless && env.TOKEN_STORE === 'auto' ? 'db' : env.TOKEN_STORE },
+    db,
+  ).catch((e) => {
+    log.warn('token store unavailable', { error: sanitizeError(e) });
+    return null;
+  });
 
   const googleClient =
     env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
       ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
       : null;
-  if (googleClient) {
-    tokenStore = await createTokenStore(
-      { ...env, TOKEN_STORE: serverless && env.TOKEN_STORE === 'auto' ? 'db' : env.TOKEN_STORE },
-      db,
-    );
+  if (googleClient && tokenStore) {
     const auth = new GoogleAuth(googleClient, tokenStore);
     sources.push(
       new GoogleCalendarSource(new GoogleCalendarClient(auth), {
@@ -64,21 +73,26 @@ export async function createRuntime(
     );
     log.info('google calendar enabled (read-only)', { tokenStore: tokenStore.kind });
   } else {
-    log.info('google disabled (GOOGLE_CLIENT_ID/SECRET not set)');
+    log.info(
+      googleClient
+        ? 'google disabled (no token store: set TOKEN_ENCRYPTION_KEY)'
+        : 'google disabled (GOOGLE_CLIENT_ID/SECRET not set)',
+    );
   }
 
+  const canvasSource = (c: CanvasCredentials) =>
+    new CanvasSource(new CanvasClient({ baseUrl: c.baseUrl, token: c.token }), {
+      baseUrl: c.baseUrl,
+      appTimeZone: env.APP_TIMEZONE,
+      intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
+      lookbackDays: env.CANVAS_LOOKBACK_DAYS,
+      lookaheadDays: env.CANVAS_LOOKAHEAD_DAYS,
+      includeGrades: env.CANVAS_SYNC_GRADES,
+    });
+  // Server configuration wins; otherwise Canvas is connected from Settings (see below).
+  const canvasFromEnv = Boolean((env.CANVAS_BASE_URL && env.CANVAS_TOKEN) || env.CANVAS_ICS_URL);
   if (env.CANVAS_BASE_URL && env.CANVAS_TOKEN) {
-    const client = new CanvasClient({ baseUrl: env.CANVAS_BASE_URL, token: env.CANVAS_TOKEN });
-    sources.push(
-      new CanvasSource(client, {
-        baseUrl: env.CANVAS_BASE_URL,
-        appTimeZone: env.APP_TIMEZONE,
-        intervalMs: env.CANVAS_SYNC_INTERVAL_MINUTES * 60_000,
-        lookbackDays: env.CANVAS_LOOKBACK_DAYS,
-        lookaheadDays: env.CANVAS_LOOKAHEAD_DAYS,
-        includeGrades: env.CANVAS_SYNC_GRADES,
-      }),
-    );
+    sources.push(canvasSource({ baseUrl: env.CANVAS_BASE_URL, token: env.CANVAS_TOKEN }));
     log.info('canvas enabled', { mode: 'rest' });
   } else if (env.CANVAS_ICS_URL) {
     sources.push(
@@ -151,6 +165,14 @@ export async function createRuntime(
   log.info('access control', { auth: env.AUTH_MODE, webUi: Boolean(env.WEB_DIST_DIR) });
 
   const scheduler = new SyncScheduler(db, sources, { onChange: (t) => changes.emit(t) });
+
+  // Canvas connected from Settings: kept in the token store, registered with the scheduler here and
+  // re-checked on every heartbeat (other serverless instances may have changed it).
+  const canvasApp = !canvasFromEnv && tokenStore ? new CanvasConnectionStore(tokenStore) : null;
+  const canvasReg = canvasApp ? new CanvasRegistration(canvasApp, scheduler, canvasSource) : null;
+  if (canvasReg && (await canvasReg.refresh().catch(() => false))) {
+    log.info('canvas enabled', { mode: 'rest', via: 'settings' });
+  }
   const inbound = createInbound(env, {
     db,
     now,
@@ -214,6 +236,7 @@ export async function createRuntime(
   async function tick() {
     const out: Record<string, unknown> = {};
     try {
+      await canvasReg?.refresh();
       const runs = await scheduler.runDue();
       out.sync = Object.fromEntries(Object.entries(runs).map(([k, v]) => [k, v.ok]));
     } catch (e) {
@@ -242,7 +265,45 @@ export async function createRuntime(
     writeEventsToGoogle: env.WRITE_EVENTS_TO_GOOGLE,
     inbound: inbound ? { pipeline: inbound.pipeline, channels: inbound.channels } : undefined,
     capture: { parser, creator },
-    integrations: integrationStatus(env, { db, scheduler, tokenStore, llmAvailable: Boolean(llm) }),
+    integrations: integrationStatus(env, {
+      db,
+      scheduler,
+      tokenStore,
+      llmAvailable: Boolean(llm),
+      canvasApp: canvasApp ? () => canvasApp.get() : undefined,
+    }),
+    canvas: {
+      connection: async () => {
+        const c = await canvasApp?.get().catch(() => null);
+        return {
+          connected: canvasFromEnv || Boolean(c),
+          managed: canvasFromEnv ? ('env' as const) : c ? ('app' as const) : null,
+          baseUrl: env.CANVAS_BASE_URL ?? c?.baseUrl ?? null,
+          canConnect: Boolean(canvasApp),
+        };
+      },
+      connect: canvasApp
+        ? async (input) => {
+            const me = await canvasApp.connect(input);
+            await canvasReg!.refresh();
+            log.info('canvas connected', { via: 'settings' });
+            return {
+              ...me,
+              firstSync: scheduler.run('canvas').then(
+                (r) => r,
+                (e) => log.warn('first canvas sync failed', { error: sanitizeError(e) }),
+              ),
+            };
+          }
+        : undefined,
+      disconnect: canvasApp
+        ? async () => {
+            await canvasApp.disconnect();
+            await canvasReg!.refresh();
+            log.info('canvas disconnected');
+          }
+        : undefined,
+    },
     disconnectGoogle: tokenStore ? () => disconnectGoogle(tokenStore!) : undefined,
     google:
       googleClient && tokenStore

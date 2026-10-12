@@ -121,6 +121,11 @@ export class CanvasClient {
     return (await (await this.get(this.url(path, params))).json()) as T;
   }
 
+  /** The token's owner (GET /users/self): used to check a URL + token before saving them. */
+  getSelf(): Promise<{ id: string; name: string }> {
+    return this.getOne('/users/self');
+  }
+
   listCourses(): Promise<CanvasCourse[]> {
     return this.getAll('/courses', {
       enrollment_state: 'active',

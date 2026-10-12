@@ -19,6 +19,8 @@ export interface FakeCanvasOptions {
   remaining?: number;
   /** Per-course assignment fixtures (course id → fixture pages). */
   assignments?: Record<string, string[]>;
+  /** The only token /users/self accepts (default CANVAS_TOKEN). */
+  validToken?: string;
 }
 
 /** Recorded-fixture Canvas API. Routes by path; follows the real pagination contract. */
@@ -50,6 +52,14 @@ export function fakeCanvasApi(opts: FakeCanvasOptions = {}) {
     const p = url.pathname;
     const codes = url.searchParams.getAll('context_codes[]');
 
+    if (p === '/api/v1/users/self') {
+      return new Headers(init?.headers).get('authorization') ===
+        `Bearer ${opts.validToken ?? CANVAS_TOKEN}`
+        ? json({ id: '42', name: 'Test Student' })
+        : new Response(JSON.stringify({ errors: [{ message: 'Invalid access token.' }] }), {
+            status: 401,
+          });
+    }
     if (p === '/api/v1/courses') return json(canvasFixture('courses.json'));
 
     const one = /^\/api\/v1\/courses\/(\w+)\/assignments\/(\w+)$/.exec(p);

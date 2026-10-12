@@ -12,7 +12,14 @@ const mask = (s: string, keep = 4) => `••••${s.slice(-keep)}`;
 /** What Settings shows: each integration, how it is configured, and its last sync. Never secrets. */
 export function integrationStatus(
   env: Env,
-  deps: { db: Db; scheduler: SyncScheduler; tokenStore: TokenStore | null; llmAvailable: boolean },
+  deps: {
+    db: Db;
+    scheduler: SyncScheduler;
+    tokenStore: TokenStore | null;
+    llmAvailable: boolean;
+    /** Canvas connected from Settings, when not configured by environment variables. */
+    canvasApp?: () => Promise<{ baseUrl: string } | null>;
+  },
 ) {
   return async (): Promise<IntegrationStatus[]> => {
     const live = new Map((await deps.scheduler.status()).map((s) => [s.source, s]));
@@ -28,8 +35,11 @@ export function integrationStatus(
       googleConfigured && deps.tokenStore
         ? (await deps.tokenStore.get(REFRESH_TOKEN_KEY).catch(() => null)) !== null
         : null;
-    const canvasMode =
+    const canvasEnv =
       env.CANVAS_BASE_URL && env.CANVAS_TOKEN ? 'rest' : env.CANVAS_ICS_URL ? 'ics' : null;
+    const canvasApp = canvasEnv ? null : await deps.canvasApp?.().catch(() => null);
+    const canvasMode = canvasEnv ?? (canvasApp ? 'rest' : null);
+    const canvasHost = (env.CANVAS_BASE_URL ?? canvasApp?.baseUrl)?.replace(/^https:\/\//, '');
     const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_ALLOWED_USER_ID);
     const twilioConfigured = Boolean(
       env.TWILIO_ACCOUNT_SID &&
@@ -38,7 +48,8 @@ export function integrationStatus(
       env.OWNER_PHONE_E164,
     );
 
-    return [
+    const list: (Omit<IntegrationStatus, 'managed'> &
+      Partial<Pick<IntegrationStatus, 'managed'>>)[] = [
       {
         id: 'google_calendar',
         label: 'Google Calendar',
@@ -52,10 +63,15 @@ export function integrationStatus(
         id: 'canvas',
         label: 'Canvas',
         configured: canvasMode !== null,
-        detail: canvasMode,
+        detail: canvasMode && canvasHost ? canvasHost : canvasMode,
         connected: canvasMode !== null,
         sync: sync('canvas'),
-        help: canvasMode ? null : 'Set CANVAS_BASE_URL + CANVAS_TOKEN (or CANVAS_ICS_URL) in .env.',
+        help: canvasMode
+          ? null
+          : deps.canvasApp
+            ? 'Not connected yet: use Connect Canvas.'
+            : 'Set CANVAS_BASE_URL + CANVAS_TOKEN (or CANVAS_ICS_URL) in the server environment.',
+        managed: canvasEnv ? 'env' : canvasApp ? 'app' : null,
       },
       {
         id: 'telegram',
@@ -89,5 +105,6 @@ export function integrationStatus(
         help: deps.llmAvailable ? null : 'Set ANTHROPIC_API_KEY to parse free-form messages.',
       },
     ];
+    return list.map((i) => ({ ...i, managed: i.managed ?? null }));
   };
 }

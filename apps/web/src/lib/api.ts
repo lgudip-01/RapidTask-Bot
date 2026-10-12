@@ -10,7 +10,9 @@ import {
   AgendaItemSchema,
   BackupsResponseSchema,
   CalendarEventSchema,
+  CanvasConnectionSchema,
   type AcceptSuggestion,
+  type CanvasConnect,
   type EventPatch,
   type NewEvent,
   type NewTask,
@@ -127,6 +129,14 @@ export const api = {
     }),
   syncStatus: () => request(z.object({ sources: z.array(SyncStatusSchema) }), '/api/sync/status'),
   disconnectGoogle: () => request(z.null(), '/api/sources/google/disconnect', { method: 'POST' }),
+
+  canvasConnection: () => request(CanvasConnectionSchema, '/api/canvas/connection'),
+  connectCanvas: (b: CanvasConnect) =>
+    request(z.object({ connected: z.boolean(), name: z.string() }), '/api/canvas/connect', {
+      method: 'POST',
+      ...send(b),
+    }),
+  disconnectCanvas: () => request(z.null(), '/api/canvas/disconnect', { method: 'POST' }),
 
   me: () =>
     request(

@@ -311,3 +311,17 @@ same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our 
   clarification (raw text is never persisted, per the message-privacy rule), the TODAY
   snapshot for `DONE <n>` (it falls back to recomputing), and the per-IP and per-sender rate
   limits.
+
+## 020 — Connect Canvas from Settings; dark maroon theme (2026-10-12)
+
+- Canvas can be connected in the UI (address and personal access token) instead of environment
+  variables. `POST /api/canvas/connect` normalizes the address to an https origin (refusing
+  plain http, IPs and local hostnames) and checks the token with `GET /users/self` before
+  saving. The credentials are stored in the token store (encrypted `secrets` row on Vercel,
+  OS keyring locally). `CanvasRegistration` adds or removes the scheduler's `canvas` source
+  to match storage; each cron tick re-checks, since serverless instances start at different
+  times. Environment variables still win when set (`managed: 'env'`).
+- The token store is created whenever possible, not only when Google is configured.
+- Theme: dark by default (storage key `planner.theme.v2`, so the old auto-saved "system" is
+  ignored). The accent is maroon, split into `--accent` (fills behind white text, 8.7:1) and
+  `--accent-ink` (text, borders and rings; 7:1 on dark surfaces).

@@ -384,6 +384,66 @@ describe('live updates', () => {
   });
 });
 
+describe('Settings: Connect Canvas', () => {
+  const canvasRow = () => ({
+    'GET /api/status': () => ({
+      integrations: [
+        {
+          id: 'canvas',
+          label: 'Canvas',
+          configured: false,
+          detail: null,
+          connected: false,
+          sync: null,
+          help: 'Not connected yet: use Connect Canvas.',
+          managed: null,
+        },
+      ],
+    }),
+  });
+
+  it('connects with an address and token, and shows Canvas\x27s answer on failure', async () => {
+    let attempts = 0;
+    const api = renderApp({
+      ...canvasRow(),
+      'POST /api/canvas/connect': () =>
+        ++attempts === 1
+          ? new Response(
+              JSON.stringify({
+                error: 'canvas_connect_failed',
+                message: 'Canvas rejected that token. Create a new one and try again.',
+              }),
+              { status: 400 },
+            )
+          : { connected: true, name: 'Test Student' },
+    });
+    window.location.hash = '#/settings';
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(await screen.findByRole('button', { name: 'Connect Canvas' }));
+    const form = screen.getByRole('form', { name: 'Connect Canvas' });
+    await user.type(within(form).getByLabelText('Canvas address'), 'school.instructure.com');
+    expect(
+      within(form).getByRole('link', { name: 'Account → Settings' }).getAttribute('href'),
+    ).toBe('https://school.instructure.com/profile/settings');
+    await user.type(within(form).getByLabelText('Access token'), '7~bad-token-0123456789abcdef');
+    await user.click(within(form).getByRole('button', { name: 'Connect' }));
+    expect(await within(form).findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Canvas rejected that token. Create a new one and try again.',
+    );
+
+    await user.click(within(form).getByRole('button', { name: 'Connect' }));
+    expect(
+      await screen.findByText('Canvas connected as Test Student. Syncing your courses…'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('form', { name: 'Connect Canvas' })).toBeNull();
+    expect(api.calls.filter((c) => c.path === '/api/canvas/connect').at(-1)!.body).toEqual({
+      baseUrl: 'school.instructure.com',
+      token: '7~bad-token-0123456789abcdef',
+    });
+  });
+});
+
 describe('Settings: Connect Google', () => {
   it('offers Connect Google when configured but not connected, and reports the result', async () => {
     renderApp({

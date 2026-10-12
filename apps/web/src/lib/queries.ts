@@ -19,6 +19,7 @@ export const keys = {
   integrations: ['integrations'] as const,
   courses: (grades: boolean) => ['courses', grades] as const,
   backups: ['backups'] as const,
+  canvasConnection: ['canvas-connection'] as const,
 };
 
 /** Agenda and task lists, after any change to items. */
@@ -260,6 +261,42 @@ export function useSyncNow() {
       void qc.invalidateQueries({ queryKey: ['agenda'] });
       void qc.invalidateQueries({ queryKey: keys.tasks });
     },
+  });
+}
+
+export const useCanvasConnection = () =>
+  useQuery({ queryKey: keys.canvasConnection, queryFn: api.canvasConnection, retry: false });
+
+/** Canvas status, Settings rows, and (after the first sync) courses and items. */
+const refreshCanvas = (qc: ReturnType<typeof useQueryClient>) => {
+  void qc.invalidateQueries({ queryKey: keys.canvasConnection });
+  void qc.invalidateQueries({ queryKey: keys.integrations });
+};
+
+export function useConnectCanvas() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.connectCanvas,
+    onSuccess: (res) => {
+      toast.success(`Canvas connected as ${res.name}. Syncing your courses…`);
+      refreshCanvas(qc);
+      // The first sync runs on the server; pick up its results shortly after.
+      setTimeout(() => {
+        refreshCanvas(qc);
+        refreshItems(qc);
+        void qc.invalidateQueries({ queryKey: ['courses'] });
+      }, 8_000);
+    },
+  });
+}
+
+export function useDisconnectCanvas() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.disconnectCanvas(),
+    onSuccess: () => toast.success('Canvas disconnected'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not disconnect'),
+    onSettled: () => refreshCanvas(qc),
   });
 }
 

@@ -19,7 +19,10 @@ import { Button, cx, ErrorState, Kbd, LoadingRows, Segmented, Switch } from '../
 import { applyTheme, readThemePref, type ThemePref } from '../lib/hooks';
 import {
   useBackups,
+  useCanvasConnection,
+  useConnectCanvas,
   useCourses,
+  useDisconnectCanvas,
   useDisconnectGoogle,
   useIntegrations,
   usePatchSettings,
@@ -194,9 +197,96 @@ function BackupsCard() {
   );
 }
 
+const field =
+  'mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-ink placeholder:text-faint';
+const labelCls = 'block text-xs font-medium text-muted';
+
+/** Canvas address + personal access token. The server checks them with Canvas before saving. */
+function CanvasConnectForm({ onDone }: { onDone: () => void }) {
+  const connect = useConnectCanvas();
+  const [baseUrl, setBaseUrl] = useState('');
+  const [token, setToken] = useState('');
+  const host = baseUrl
+    .trim()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0];
+  const tokenPage = host && host.includes('.') ? `https://${host}/profile/settings` : null;
+  return (
+    <form
+      className="mt-1 w-full space-y-3 rounded-xl border border-line bg-surface-2 p-3"
+      aria-label="Connect Canvas"
+      onSubmit={(e) => {
+        e.preventDefault();
+        connect.mutate({ baseUrl, token }, { onSuccess: onDone });
+      }}
+    >
+      <label className={labelCls}>
+        Canvas address
+        <input
+          className={field}
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder="yourschool.instructure.com"
+          autoComplete="url"
+          inputMode="url"
+          required
+          autoFocus
+        />
+      </label>
+      <label className={labelCls}>
+        Access token
+        <input
+          className={field}
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="Paste the token from Canvas"
+          autoComplete="off"
+          required
+        />
+      </label>
+      <p className="text-xs text-muted">
+        In Canvas, open{' '}
+        {tokenPage ? (
+          <a
+            className="text-accent-ink underline"
+            href={tokenPage}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Account → Settings
+          </a>
+        ) : (
+          <span className="text-ink">Account → Settings</span>
+        )}
+        , choose <span className="text-ink">+ New Access Token</span>, name it “Planner”, and copy
+        the token. Planner only reads from Canvas and keeps the token encrypted.
+      </p>
+      {connect.error && (
+        <p role="alert" className="rounded-md bg-danger-soft px-2 py-1 text-xs text-danger">
+          {connect.error.message}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" variant="primary" disabled={connect.isPending}>
+          {connect.isPending ? 'Checking with Canvas…' : 'Connect'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function IntegrationRow({ i }: { i: IntegrationStatus }) {
   const sync = useSyncNow();
   const disconnect = useDisconnectGoogle();
+  const isCanvas = i.id === 'canvas';
+  const canvasConn = useCanvasConnection();
+  const disconnectCanvas = useDisconnectCanvas();
+  const [connecting, setConnecting] = useState(false);
+  const canConnectCanvas = isCanvas && !i.configured && canvasConn.data?.canConnect === true;
   const canSync = i.configured && (i.id === 'google_calendar' || i.id === 'canvas');
   return (
     <li className="flex flex-wrap items-start gap-3 py-3 first:pt-0 last:pb-0">
@@ -238,6 +328,23 @@ function IntegrationRow({ i }: { i: IntegrationStatus }) {
             Sync now
           </Button>
         )}
+        {canConnectCanvas && !connecting && (
+          <Button size="sm" variant="primary" onClick={() => setConnecting(true)}>
+            Connect Canvas
+          </Button>
+        )}
+        {isCanvas && i.managed === 'app' && (
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() =>
+              confirm('Disconnect Canvas? Sync stops until you connect again.') &&
+              disconnectCanvas.mutate()
+            }
+          >
+            Disconnect
+          </Button>
+        )}
         {i.id === 'google_calendar' && i.configured && i.connected === false && (
           <Button
             size="sm"
@@ -261,6 +368,7 @@ function IntegrationRow({ i }: { i: IntegrationStatus }) {
           </Button>
         )}
       </div>
+      {connecting && <CanvasConnectForm onDone={() => setConnecting(false)} />}
     </li>
   );
 }
@@ -315,9 +423,8 @@ export function SettingsView() {
           ))}
         </ul>
         <p className="mt-3 text-xs text-muted">
-          Connect Google with the button above (read-only calendar access). Canvas details go in the
-          server environment: <code className="rounded bg-surface-2 px-1">.env</code> locally, or
-          the Vercel project's environment variables when deployed.
+          Connect Google and Canvas with the buttons above. Both are read-only: Planner never
+          changes anything in your calendar or courses.
         </p>
       </Card>
 

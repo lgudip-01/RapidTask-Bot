@@ -102,6 +102,7 @@ export function mockApi(
         status: 404,
       });
     const out = await handler(body, url);
+    if (out instanceof Response) return out; // e.g. an error status
     return new Response(out === null ? null : JSON.stringify(out), {
       status: out === null ? 204 : 200,
     });
@@ -117,4 +118,10 @@ export const defaultRoutes = {
   }),
   'GET /api/settings': () => ({ settings: DEFAULT_SETTINGS }),
   'GET /api/status': () => ({ integrations: [] }),
+  'GET /api/canvas/connection': () => ({
+    connected: false,
+    managed: null,
+    baseUrl: null,
+    canConnect: true,
+  }),
 };
