@@ -69,6 +69,43 @@ describe('password login', () => {
     expect((await e.req('/api/tasks', { headers: { cookie: e.cookieFrom(ok) } })).status).toBe(200);
   });
 
+  it('sends every failed sign-in back to the form with a message', async () => {
+    const e = await env();
+    const text = async (url: string) => (await e.req(url)).text();
+    expect(await text('/login')).not.toContain('role="alert"');
+
+    const bad = await e.login('nope');
+    const page = await text(bad.headers.get('location')!);
+    expect(page).toContain('Wrong password. Please try again.');
+    expect(page).toContain('name="password"'); // the form is shown again, empty
+
+    // Posted from another address (e.g. a Vercel preview URL that is not PUBLIC_BASE_URL).
+    const other = await e.req('/auth/login', {
+      method: 'POST',
+      headers: {
+        origin: 'https://rapid-task-preview.vercel.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ password: PASSWORD }).toString(),
+    });
+    expect(other.status).toBe(303);
+    expect(other.headers.get('set-cookie')).toBeNull();
+    expect(await text(other.headers.get('location')!)).toContain(`Sign in at ${ORIGIN}`);
+  });
+
+  it('explains a malformed password hash instead of failing', async () => {
+    const e = await env({
+      auth: {
+        mode: 'password',
+        passwordHash: 'scrypt$x$8$1$c2FsdA$aGFzaA',
+        sessionSecret: SECRET,
+        sessionTtlMs: 86_400_000,
+      },
+    });
+    const res = await e.login(PASSWORD);
+    expect(res.headers.get('location')).toContain('/login?e=config');
+  });
+
   it('rejects tampered and expired sessions', async () => {
     const e = await env();
     const cookie = e.cookieFrom(await e.login(PASSWORD));
@@ -92,8 +129,12 @@ describe('password login', () => {
     const e = await env();
     for (let i = 0; i < 5; i++) expect((await e.login('wrong')).status).toBe(303);
     const blocked = await e.login(PASSWORD);
-    expect(blocked.status).toBe(429);
+    // Back to the sign-in page with an explanation, and no session.
+    expect(blocked.status).toBe(303);
+    expect(blocked.headers.get('location')).toBe('/login?e=locked');
+    expect(blocked.headers.get('set-cookie')).toBeNull();
     expect(blocked.headers.get('retry-after')).toBe('900');
+    expect(await (await e.req('/login?e=locked')).text()).toContain('Too many attempts');
     expect((await e.login(PASSWORD, '198.51.100.9')).status).toBe(303); // other IP unaffected
   });
 

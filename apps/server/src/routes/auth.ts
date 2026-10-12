@@ -1,12 +1,34 @@
 import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
+import { log, sanitizeError } from '../log';
 import { verifyPassword, signSession } from '../security/auth';
 import { ipRateLimit, SESSION_COOKIE, type SecurityConfig } from '../security/middleware';
 
 /** Only same-site relative paths are allowed after login. */
 const safeNext = (n: string | undefined) => (n && /^\/(?!\/)[\w\-./#?=&%]*$/.test(n) ? n : '/');
 
-const page = (error: boolean, next: string) => `<!doctype html>
+const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+
+/** Why the last sign-in failed (`?e=`). Every failure comes back to this page. */
+function errorText(code: string | undefined, publicOrigin: string | undefined): string | null {
+  switch (code) {
+    case undefined:
+    case '':
+      return null;
+    case 'locked':
+      return 'Too many attempts. Wait 15 minutes, then try again.';
+    case 'origin':
+      return publicOrigin
+        ? `Sign in at ${publicOrigin} (this address doesn't match PUBLIC_BASE_URL).`
+        : 'This sign-in came from a different site. Reload the page and try again.';
+    case 'config':
+      return "Sign-in isn't set up correctly on the server (AUTH_PASSWORD_HASH). Check the logs.";
+    default:
+      return 'Wrong password. Please try again.';
+  }
+}
+
+const page = (error: string | null, next: string) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sign in · Planner</title>
 <style>
@@ -27,7 +49,7 @@ button{margin-top:16px;width:100%;height:40px;border:0;border-radius:10px;backgr
 <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
 <input type="hidden" name="next" value="${next.replace(/"/g, '&quot;')}">
 <button type="submit">Sign in</button>
-${error ? '<div class="e" role="alert">That password didn\'t work.</div>' : ''}
+${error ? `<div class="e" role="alert">${esc(error)}</div>` : ''}
 </form></body></html>`;
 
 export function authRoutes(security: SecurityConfig) {
@@ -37,7 +59,9 @@ export function authRoutes(security: SecurityConfig) {
 
   app.get('/login', (c) => {
     if (auth.mode !== 'password') return c.redirect('/', 302);
-    return c.html(page(c.req.query('e') === '1', safeNext(c.req.query('next'))));
+    return c.html(
+      page(errorText(c.req.query('e'), security.publicOrigin), safeNext(c.req.query('next'))),
+    );
   });
 
   app.post(
@@ -49,19 +73,27 @@ export function authRoutes(security: SecurityConfig) {
       trustProxy: security.trustProxy,
       name: 'login',
       now: security.now,
+      onLimited: (c) => c.redirect('/login?e=locked', 303),
     }),
     async (c) => {
       if (auth.mode !== 'password') return c.json({ error: 'password_login_disabled' }, 404);
       const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
       const password = typeof form.password === 'string' ? form.password : '';
       const next = safeNext(typeof form.next === 'string' ? form.next : undefined);
-      if (
-        !password ||
-        password.length > 1024 ||
-        !(await verifyPassword(password, auth.passwordHash))
-      ) {
-        return c.redirect(`/login?e=1&next=${encodeURIComponent(next)}`, 303);
+      const again = (code: string) =>
+        c.redirect(`/login?e=${code}&next=${encodeURIComponent(next)}`, 303);
+      let ok: boolean;
+      try {
+        ok =
+          Boolean(password) &&
+          password.length <= 1024 &&
+          (await verifyPassword(password, auth.passwordHash));
+      } catch (e) {
+        // A malformed AUTH_PASSWORD_HASH: say so instead of failing with a blank error page.
+        log.error('password check failed', { error: sanitizeError(e) });
+        return again('config');
       }
+      if (!ok) return again('1');
       setCookie(
         c,
         SESSION_COOKIE,

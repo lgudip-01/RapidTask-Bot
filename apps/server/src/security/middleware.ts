@@ -116,7 +116,11 @@ export function sameOriginWrites(publicOrigin?: string): MiddlewareHandler {
         : origin === 'null'
           ? site === 'same-origin'
           : site === 'same-origin' || site === 'none' || site === undefined;
-    if (!ok) return c.json({ error: 'cross_origin_forbidden' }, 403);
+    if (!ok) {
+      // The sign-in form gets its page back with an explanation instead of a bare 403.
+      if (c.req.path === '/auth/login') return c.redirect('/login?e=origin', 303);
+      return c.json({ error: 'cross_origin_forbidden' }, 403);
+    }
     await next();
   };
 }
@@ -144,6 +148,8 @@ export function ipRateLimit(opts: {
   trustProxy: boolean;
   name: string;
   now?: () => number;
+  /** Response when limited (default: JSON 429). */
+  onLimited?: (c: Context) => Response | Promise<Response>;
 }): MiddlewareHandler {
   const limiter = new SlidingWindowLimiter(opts.limit, opts.windowMs, opts.now);
   let lastLog = 0;
@@ -155,6 +161,7 @@ export function ipRateLimit(opts: {
         log.warn('rate limited', { route: opts.name });
       }
       c.header('Retry-After', String(Math.ceil(opts.windowMs / 1000)));
+      if (opts.onLimited) return opts.onLimited(c);
       return c.json({ error: 'rate_limited' }, 429);
     }
     await next();
