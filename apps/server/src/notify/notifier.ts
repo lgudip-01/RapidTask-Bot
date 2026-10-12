@@ -38,10 +38,10 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export interface NotifierOptions {
   timeZone: string;
-  settings: () => Settings;
+  settings: () => Settings | Promise<Settings>;
   /** Delivers one message to the owner (Telegram). Throwing means "not delivered, retry later". */
   send: (text: string) => Promise<void>;
-  backupStatus?: () => BackupStatus;
+  backupStatus?: () => BackupStatus | Promise<BackupStatus>;
   /** From CANVAS_TOKEN_EXPIRES_AT; enables the expiry warning. */
   canvasTokenExpiresAt?: Date;
   /** Consecutive failures of one sync source before an alert (default 3). */
@@ -80,34 +80,32 @@ export class Notifier {
   }
 
   /** Keys from `keys` not yet sent for `kind`. */
-  private unsent(kind: Kind, keys: string[]): string[] {
+  private async unsent(kind: Kind, keys: string[]): Promise<string[]> {
     if (!keys.length) return [];
     const sent = new Set(
-      this.db
-        .select({ key: notifications.key })
-        .from(notifications)
-        .where(and(eq(notifications.kind, kind), inArray(notifications.key, keys)))
-        .all()
-        .map((r) => r.key),
+      (
+        await this.db
+          .select({ key: notifications.key })
+          .from(notifications)
+          .where(and(eq(notifications.kind, kind), inArray(notifications.key, keys)))
+          .all()
+      ).map((r) => r.key),
     );
     return keys.filter((k) => !sent.has(k));
   }
 
   /** Claims every key, sends, and releases the claims if delivery fails (retried next tick). */
   private async deliver(kind: Kind, keys: string[], text: string): Promise<boolean> {
-    const ids = this.db.transaction((tx) =>
-      keys.map((key) => {
-        const id = randomUUID();
-        tx.insert(notifications).values({ id, kind, key, sentAt: this.now() }).run();
-        return id;
-      }),
-    );
+    const rows = keys.map((key) => ({ id: randomUUID(), kind, key, sentAt: this.now() }));
+    // One multi-row insert: all claims land together or not at all.
+    await this.db.insert(notifications).values(rows).run();
+    const ids = rows.map((r) => r.id);
     try {
       await this.o.send(text);
       log.info('notification sent', { kind, items: keys.length });
       return true;
     } catch (e) {
-      this.db.delete(notifications).where(inArray(notifications.id, ids)).run();
+      await this.db.delete(notifications).where(inArray(notifications.id, ids)).run();
       const t = this.now().getTime();
       if (t - this.lastSendErrorLog > SEND_ERROR_LOG_MS) {
         this.lastSendErrorLog = t;
@@ -123,8 +121,8 @@ export class Notifier {
     const due = wallTime(today, s.digestTime, this.o.timeZone);
     const late = now.getTime() - due.getTime();
     if (late < 0 || late > DIGEST_GRACE_MS) return;
-    if (!this.unsent('digest', [today]).length) return;
-    const list = buildTodayList(this.db, now, this.o.timeZone);
+    if (!(await this.unsent('digest', [today])).length) return;
+    const list = await buildTodayList(this.db, now, this.o.timeZone);
     await this.deliver('digest', [today], `☀️ Good morning!\n${list.text}`);
   }
 
@@ -136,21 +134,22 @@ export class Notifier {
     const tomorrow = addDays(today, 1);
     const from = startOfDateInZone(tomorrow, tz);
     const to = startOfDateInZone(addDays(tomorrow, 1), tz);
-    const rows = this.db
-      .select()
-      .from(tasks)
-      .where(
-        and(
-          isNotNull(tasks.due),
-          gte(tasks.due, from),
-          lt(tasks.due, to),
-          ne(tasks.status, 'done'),
-        ),
-      )
-      .all()
-      .sort((a, b) => a.due!.getTime() - b.due!.getTime());
+    const rows = (
+      await this.db
+        .select()
+        .from(tasks)
+        .where(
+          and(
+            isNotNull(tasks.due),
+            gte(tasks.due, from),
+            lt(tasks.due, to),
+            ne(tasks.status, 'done'),
+          ),
+        )
+        .all()
+    ).sort((a, b) => a.due!.getTime() - b.due!.getTime());
     const key = (t: (typeof rows)[number]) => `${t.id}@${t.due!.toISOString()}`;
-    const pending = new Set(this.unsent('deadline', rows.map(key)));
+    const pending = new Set(await this.unsent('deadline', rows.map(key)));
     const todo = rows.filter((t) => pending.has(key(t)));
     if (!todo.length) return;
     const lines = todo.map((t) => {
@@ -172,20 +171,21 @@ export class Notifier {
     if (!s.eventReminders) return;
     const tz = this.o.timeZone;
     const horizon = new Date(now.getTime() + s.eventReminderMinutes * MINUTE);
-    const rows = this.db
-      .select()
-      .from(calendarEvents)
-      .where(
-        and(
-          eq(calendarEvents.allDay, false),
-          gt(calendarEvents.start, now),
-          lte(calendarEvents.start, horizon),
-        ),
-      )
-      .all()
-      .sort((a, b) => a.start.getTime() - b.start.getTime());
+    const rows = (
+      await this.db
+        .select()
+        .from(calendarEvents)
+        .where(
+          and(
+            eq(calendarEvents.allDay, false),
+            gt(calendarEvents.start, now),
+            lte(calendarEvents.start, horizon),
+          ),
+        )
+        .all()
+    ).sort((a, b) => a.start.getTime() - b.start.getTime());
     const key = (e: (typeof rows)[number]) => `${e.id}@${e.start.toISOString()}`;
-    const pending = new Set(this.unsent('event', rows.map(key)));
+    const pending = new Set(await this.unsent('event', rows.map(key)));
     const todo = rows.filter((e) => pending.has(key(e)));
     if (!todo.length) return;
     const lines = todo.map((e) => {
@@ -197,9 +197,9 @@ export class Notifier {
   }
 
   /** Active health problems, most specific first. */
-  healthConditions(now: Date): { id: string; text: string }[] {
+  async healthConditions(now: Date): Promise<{ id: string; text: string }[]> {
     const out: { id: string; text: string }[] = [];
-    const states = this.db.select().from(syncState).all();
+    const states = await this.db.select().from(syncState).all();
     const covered = new Set<string>();
 
     const google = states.find((r) => r.source === 'google_calendar');
@@ -207,7 +207,7 @@ export class Notifier {
       covered.add('google_calendar');
       out.push({
         id: 'google-auth',
-        text: '⚠️ Google Calendar access was revoked or has expired, so calendar sync has stopped. On your computer run: npm run auth:google',
+        text: '⚠️ Google Calendar access was revoked or has expired, so calendar sync has stopped. Reconnect in Planner: Settings → Connect Google.',
       });
     }
     const canvas = states.find((r) => r.source === 'canvas');
@@ -238,7 +238,7 @@ export class Notifier {
       });
     }
 
-    const b = this.o.backupStatus?.();
+    const b = await this.o.backupStatus?.();
     if (b && (b.health === 'failed' || b.health === 'stale')) {
       const since = b.lastSuccessAt
         ? `${Math.round((now.getTime() - Date.parse(b.lastSuccessAt)) / HOUR)} hours ago`
@@ -256,9 +256,9 @@ export class Notifier {
 
   private async health(now: Date) {
     const today = dateInZone(now, this.o.timeZone);
-    for (const c of this.healthConditions(now)) {
+    for (const c of await this.healthConditions(now)) {
       const key = `${c.id}@${today}`;
-      if (this.unsent('health', [key]).length) await this.deliver('health', [key], c.text);
+      if ((await this.unsent('health', [key])).length) await this.deliver('health', [key], c.text);
     }
   }
 
@@ -268,7 +268,7 @@ export class Notifier {
     this.ticking = true;
     try {
       const now = this.now();
-      const s = this.o.settings();
+      const s = await this.o.settings();
       for (const [name, step] of [
         ['digest', () => this.digest(now, s)],
         ['deadlines', () => this.deadlines(now, s)],
@@ -282,7 +282,7 @@ export class Notifier {
         }
       }
       // Keep the claim log small.
-      this.db
+      await this.db
         .delete(notifications)
         .where(lt(notifications.sentAt, new Date(now.getTime() - 90 * DAY)))
         .run();

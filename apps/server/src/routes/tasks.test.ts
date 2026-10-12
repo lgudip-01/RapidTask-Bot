@@ -4,7 +4,7 @@ import { fakeSource, makeTestEnv } from '../../test/helpers';
 
 describe('/api/tasks', () => {
   it('creates, reads, updates, completes, and deletes a local task', async () => {
-    const env = makeTestEnv([]);
+    const env = await makeTestEnv([]);
     const created = await env.json('POST', '/api/tasks', {
       title: '  Buy shelf ',
       due: '2026-10-11T04:00:00Z',
@@ -40,7 +40,7 @@ describe('/api/tasks', () => {
   });
 
   it('validates input', async () => {
-    const env = makeTestEnv([]);
+    const env = await makeTestEnv([]);
     expect((await env.json('POST', '/api/tasks', { title: '' })).status).toBe(400);
     expect((await env.json('POST', '/api/tasks', { title: 'x', due: 'friday' })).status).toBe(400);
     const { body } = await env.json('POST', '/api/tasks', { title: 'x' });
@@ -48,7 +48,7 @@ describe('/api/tasks', () => {
   });
 
   it('only allows status/sortOrder edits on synced tasks, and never deletes them', async () => {
-    const env = makeTestEnv([fakeSource('sync/pages.json')]);
+    const env = await makeTestEnv([fakeSource('sync/pages.json')]);
     await env.scheduler.run('fake');
     const { body } = await env.json('GET', '/api/tasks?source=canvas');
     const id = body.tasks[0].id;
@@ -59,7 +59,7 @@ describe('/api/tasks', () => {
   });
 
   it('filters by source and status', async () => {
-    const env = makeTestEnv([fakeSource('sync/pages.json')]);
+    const env = await makeTestEnv([fakeSource('sync/pages.json')]);
     await env.scheduler.run('fake');
     await env.json('POST', '/api/tasks', { title: 'local one' });
     expect((await env.json('GET', '/api/tasks?source=local')).body.tasks).toHaveLength(1);

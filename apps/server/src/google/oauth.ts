@@ -109,7 +109,7 @@ export class GoogleAuth implements AccessTokenProvider {
     if (this.cached && this.cached.expiresAt > this.now()) return this.cached.token;
     const refreshToken = await this.store.get(REFRESH_TOKEN_KEY);
     if (!refreshToken) {
-      throw new GoogleAuthError('Google is not connected: run `npm run auth:google`');
+      throw new GoogleAuthError('Google is not connected: open Settings → Connect Google');
     }
     let json: TokenResponse;
     try {
@@ -122,7 +122,7 @@ export class GoogleAuth implements AccessTokenProvider {
     } catch (e) {
       if (e instanceof GoogleAuthError && e.message.includes('invalid_grant')) {
         throw new GoogleAuthError(
-          'Google refresh token was rejected (expired or revoked): run `npm run auth:google`',
+          'Google refresh token was rejected (expired or revoked): reconnect in Settings → Connect Google',
         );
       }
       throw e;

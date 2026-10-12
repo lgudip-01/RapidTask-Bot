@@ -14,6 +14,8 @@ export const BackupStatusSchema = z.object({
   running: z.boolean(),
   enabled: z.boolean(),
   keep: z.number(),
+  /** file = snapshots on the server's disk; telegram = the nightly export is sent to the owner. */
+  target: z.enum(['file', 'telegram']).default('file'),
 });
 export type BackupStatusDto = z.infer<typeof BackupStatusSchema>;
 

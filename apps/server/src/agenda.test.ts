@@ -8,7 +8,7 @@ const TO = '2026-10-10T04:00:00.000Z';
 
 async function seeded() {
   const src = fakeSource('sync/agenda.json');
-  const env = makeTestEnv([src], '2026-10-09T16:00:00.000Z');
+  const env = await makeTestEnv([src], '2026-10-09T16:00:00.000Z');
   await env.scheduler.run('fake');
   return env;
 }

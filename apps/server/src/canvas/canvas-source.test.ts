@@ -7,7 +7,7 @@ import { announcements, calendarEvents, courses, tasks } from '../db/schema';
 import { applySyncBatch } from '../sync/upsert';
 import { CanvasSource } from './canvas-source';
 
-function setup(api = fakeCanvasApi(), includeGrades = true) {
+async function setup(api = fakeCanvasApi(), includeGrades = true) {
   const client = new CanvasClient({
     baseUrl: CANVAS_BASE,
     token: CANVAS_TOKEN,
@@ -23,15 +23,15 @@ function setup(api = fakeCanvasApi(), includeGrades = true) {
     includeGrades,
     now: () => new Date('2026-10-09T16:00:00Z'),
   });
-  return { api, source, env: makeTestEnv([source]) };
+  return { api, source, env: await makeTestEnv([source]) };
 }
 
 describe('CanvasSource', () => {
   it('syncs current-term courses, dated assignments, events, and announcement titles', async () => {
-    const { env, api } = setup();
+    const { env, api } = await setup();
     expect(await env.scheduler.run('canvas')).toMatchObject({ ok: true });
 
-    const courseRows = env.db.select().from(courses).all();
+    const courseRows = await env.db.select().from(courses).all();
     expect(courseRows.map((c) => c.externalId).sort()).toEqual([
       'course-101',
       'course-102',
@@ -46,7 +46,7 @@ describe('CanvasSource', () => {
       .filter((p) => p.includes('/assignments'));
     expect(assignmentPaths.some((p) => /courses\/(90|120|88)\//.test(p))).toBe(false);
 
-    const taskRows = env.db.select().from(tasks).all();
+    const taskRows = await env.db.select().from(tasks).all();
     expect(taskRows.map((t) => t.externalId).sort()).toEqual([
       'assignment-1001',
       'assignment-1002',
@@ -62,7 +62,7 @@ describe('CanvasSource', () => {
       pointsPossible: 30,
     });
 
-    const events = env.db.select().from(calendarEvents).all();
+    const events = await env.db.select().from(calendarEvents).all();
     expect(events.find((e) => e.externalId === 'event-502')).toMatchObject({
       allDay: true,
       calendarName: 'MATH 221: Calculus III',
@@ -72,7 +72,7 @@ describe('CanvasSource', () => {
       '2026-10-13T04:00:00.000Z',
     );
 
-    const ann = env.db.select().from(announcements).all();
+    const ann = await env.db.select().from(announcements).all();
     expect(ann).toHaveLength(1);
     expect(ann[0]).toMatchObject({
       title: 'Midterm moved to Oct 22',
@@ -82,7 +82,7 @@ describe('CanvasSource', () => {
   });
 
   it('stores grades but the API hides them unless requested', async () => {
-    const { env } = setup();
+    const { env } = await setup();
     await env.scheduler.run('canvas');
     const hidden = await env.json('GET', '/api/courses');
     expect(
@@ -102,25 +102,29 @@ describe('CanvasSource', () => {
   });
 
   it('does not store grades at all when disabled', async () => {
-    const { env } = setup(fakeCanvasApi(), false);
+    const { env } = await setup(fakeCanvasApi(), false);
     await env.scheduler.run('canvas');
     expect(
-      env.db.select().from(courses).where(eq(courses.externalId, 'course-101')).get(),
+      await env.db.select().from(courses).where(eq(courses.externalId, 'course-101')).get(),
     ).toMatchObject({
       currentScore: null,
     });
   });
 
   it('is idempotent and removes assignments that disappear upstream, keeping local check-offs', async () => {
-    const { env } = setup();
+    const { env } = await setup();
     await env.scheduler.run('canvas');
-    const ps4 = env.db.select().from(tasks).where(eq(tasks.externalId, 'assignment-1001')).get()!;
+    const ps4 = (await env.db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.externalId, 'assignment-1001'))
+      .get())!;
     await env.json('PATCH', `/api/tasks/${ps4.id}`, { status: 'done' });
 
     // Same data again: same ids, local status kept.
     await env.scheduler.run('canvas');
     expect(
-      env.db.select().from(tasks).where(eq(tasks.externalId, 'assignment-1001')).get(),
+      await env.db.select().from(tasks).where(eq(tasks.externalId, 'assignment-1001')).get(),
     ).toMatchObject({
       id: ps4.id,
       status: 'done',
@@ -128,32 +132,24 @@ describe('CanvasSource', () => {
     });
 
     // Course 102 now has no assignments: its task is removed on the next full listing.
-    expect(
-      env.db
-        .select()
-        .from(tasks)
-        .all()
-        .map((t) => t.externalId),
-    ).toContain('assignment-2001');
-    const next = setup(
+    expect((await env.db.select().from(tasks).all()).map((t) => t.externalId)).toContain(
+      'assignment-2001',
+    );
+    const next = await setup(
       fakeCanvasApi({
         assignments: { '101': ['assignments-101-page1.json', 'assignments-101-page2.json'] },
       }),
     );
-    applySyncBatch(env.db, next.source, await next.source.fetchSince(), env.now());
-    const remaining = env.db
-      .select()
-      .from(tasks)
-      .all()
-      .map((t) => t.externalId);
+    await applySyncBatch(env.db, next.source, await next.source.fetchSince(), env.now());
+    const remaining = (await env.db.select().from(tasks).all()).map((t) => t.externalId);
     expect(remaining).not.toContain('assignment-2001');
     expect(remaining).toContain('assignment-1001');
   });
 
   it('rejects writes to canvas tasks other than status/sortOrder', async () => {
-    const { env } = setup();
+    const { env } = await setup();
     await env.scheduler.run('canvas');
-    const t = env.db.select().from(tasks).get()!;
+    const t = (await env.db.select().from(tasks).get())!;
     expect((await env.json('PATCH', `/api/tasks/${t.id}`, { title: 'renamed' })).status).toBe(403);
     expect((await env.json('DELETE', `/api/tasks/${t.id}`)).status).toBe(403);
   });

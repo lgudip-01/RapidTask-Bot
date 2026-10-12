@@ -14,7 +14,7 @@ const PASSWORD = 'correct horse battery staple';
 const SECRET = 's'.repeat(40);
 const hash = await hashPassword(PASSWORD);
 
-function env(over: Partial<SecurityConfig> = {}, webDist?: string) {
+async function env(over: Partial<SecurityConfig> = {}, webDist?: string) {
   let t = Date.parse('2026-10-09T16:00:00Z');
   const security: SecurityConfig = {
     auth: { mode: 'password', passwordHash: hash, sessionSecret: SECRET, sessionTtlMs: 86_400_000 },
@@ -24,7 +24,7 @@ function env(over: Partial<SecurityConfig> = {}, webDist?: string) {
     now: () => t,
     ...over,
   };
-  const e = makeTestEnv([], '2026-10-09T16:00:00.000Z', { security, webDist });
+  const e = await makeTestEnv([], '2026-10-09T16:00:00.000Z', { security, webDist });
   const req = (url: string, init: RequestInit & { ip?: string } = {}) =>
     e.app.request(url, {
       ...init,
@@ -46,7 +46,7 @@ function env(over: Partial<SecurityConfig> = {}, webDist?: string) {
 
 describe('password login', () => {
   it('protects the UI and API, and logs in with the right password', async () => {
-    const e = env();
+    const e = await env();
     const page = await e.req('/');
     expect(page.status).toBe(302);
     expect(page.headers.get('location')).toBe('/login?next=%2F');
@@ -70,7 +70,7 @@ describe('password login', () => {
   });
 
   it('rejects tampered and expired sessions', async () => {
-    const e = env();
+    const e = await env();
     const cookie = e.cookieFrom(await e.login(PASSWORD));
     const tampered = cookie.replace(/.$/, (ch) => (ch === 'A' ? 'B' : 'A'));
     expect((await e.req('/api/tasks', { headers: { cookie: tampered } })).status).toBe(401);
@@ -79,7 +79,7 @@ describe('password login', () => {
   });
 
   it('only redirects to same-site paths after login', async () => {
-    const e = env();
+    const e = await env();
     const res = await e.req('/auth/login', {
       method: 'POST',
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded' },
@@ -89,7 +89,7 @@ describe('password login', () => {
   });
 
   it('rate limits login attempts per IP', async () => {
-    const e = env();
+    const e = await env();
     for (let i = 0; i < 5; i++) expect((await e.login('wrong')).status).toBe(303);
     const blocked = await e.login(PASSWORD);
     expect(blocked.status).toBe(429);
@@ -98,7 +98,7 @@ describe('password login', () => {
   });
 
   it('logout clears the cookie', async () => {
-    const e = env();
+    const e = await env();
     const cookie = e.cookieFrom(await e.login(PASSWORD));
     const out = await e.req('/auth/logout', {
       method: 'POST',
@@ -111,14 +111,14 @@ describe('password login', () => {
 
 describe('public routes and hardening', () => {
   it('keeps /health and /webhooks/* reachable without a session', async () => {
-    const e = env();
+    const e = await env();
     expect(await (await e.req('/health')).json()).toEqual({ ok: true });
     // No channel configured → 404, but crucially not 401/302.
     expect((await e.req('/webhooks/telegram', { method: 'POST', body: '{}' })).status).toBe(404);
   });
 
   it('rate limits webhooks per IP', async () => {
-    const e = env();
+    const e = await env();
     const codes = [];
     for (let i = 0; i < 7; i++)
       codes.push((await e.req('/webhooks/twilio', { method: 'POST', body: 'x' })).status);
@@ -127,7 +127,7 @@ describe('public routes and hardening', () => {
   });
 
   it('sends security headers', async () => {
-    const res = await env().req('/health');
+    const res = await (await env()).req('/health');
     expect(res.headers.get('content-security-policy')).toContain("default-src 'self'");
     expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
     expect(res.headers.get('strict-transport-security')).toContain('max-age=63072000');
@@ -137,13 +137,13 @@ describe('public routes and hardening', () => {
   });
 
   it('redirects plain http to https behind the proxy', async () => {
-    const res = await env().req('/health', { headers: { 'x-forwarded-proto': 'http' } });
+    const res = await (await env()).req('/health', { headers: { 'x-forwarded-proto': 'http' } });
     expect(res.status).toBe(301);
     expect(res.headers.get('location')).toMatch(/^https:/);
   });
 
   it('blocks cross-origin writes and only allows CORS for the deployment origin', async () => {
-    const e = env();
+    const e = await env();
     const cookie = e.cookieFrom(await e.login(PASSWORD));
     const post = (origin: string) =>
       e.req('/api/tasks', {
@@ -181,7 +181,7 @@ describe('public routes and hardening', () => {
   });
 
   it('cloudflare mode requires a valid Access assertion', async () => {
-    const e = env({ auth: { mode: 'cloudflare', verify: async (t) => t === 'valid-jwt' } });
+    const e = await env({ auth: { mode: 'cloudflare', verify: async (t) => t === 'valid-jwt' } });
     // API: 401 without valid credentials (same as password mode); pages: 403 (no login page).
     expect((await e.req('/api/tasks')).status).toBe(401);
     expect(
@@ -194,7 +194,7 @@ describe('public routes and hardening', () => {
   });
 
   it('answers 401 on every /api route without a session, and lets only public paths through', async () => {
-    const e = env();
+    const e = await env();
     for (const url of [
       '/api/agenda?from=2026-10-09T00:00:00Z&to=2026-10-10T00:00:00Z',
       '/api/tasks',
@@ -214,7 +214,7 @@ describe('public routes and hardening', () => {
   });
 
   it('rate limits /health per IP', async () => {
-    const e = env({ healthRateLimitPerMin: 3 });
+    const e = await env({ healthRateLimitPerMin: 3 });
     const codes = [];
     for (let i = 0; i < 5; i++) codes.push((await e.req('/health')).status);
     expect(codes).toEqual([200, 200, 200, 429, 429]);
@@ -226,7 +226,7 @@ describe('public routes and hardening', () => {
     fs.mkdirSync(path.join(dist, 'assets'));
     fs.writeFileSync(path.join(dist, 'index.html'), '<!doctype html><div id="root"></div>');
     fs.writeFileSync(path.join(dist, 'assets', 'app-abc123.js'), 'console.log(1)');
-    const e = env({}, dist);
+    const e = await env({}, dist);
     const cookie = e.cookieFrom(await e.login(PASSWORD));
     const home = await e.req('/', { headers: { cookie } });
     expect(await home.text()).toContain('id="root"');
@@ -316,9 +316,9 @@ describe('environment guards', () => {
 
 describe('backup', () => {
   it('exports every task as JSON', async () => {
-    const e = makeTestEnv([]);
+    const e = await makeTestEnv([]);
     await e.json('POST', '/api/tasks', { title: 'Back me up' });
-    const out = exportData(e.db, new Date('2026-10-09T16:00:00Z'));
+    const out = await exportData(e.db, new Date('2026-10-09T16:00:00Z'));
     expect(out).toMatchObject({ version: 2, count: 1, exportedAt: '2026-10-09T16:00:00.000Z' });
     expect(out.tasks[0]).toMatchObject({ title: 'Back me up', source: 'local' });
   });

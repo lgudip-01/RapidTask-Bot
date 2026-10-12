@@ -7,7 +7,7 @@ import { SyncScheduler } from './sync/scheduler';
 
 describe('GET /api/hello', () => {
   it('returns a valid hello payload', async () => {
-    const db = createDb(':memory:');
+    const db = await createDb(':memory:');
     const now = () => new Date();
     const app = createApp({
       db,

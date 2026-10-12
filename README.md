@@ -15,7 +15,7 @@ docs/DECISIONS.md    why things are the way they are
 
 ## Run locally
 
-Requires Node 22.12+ (`winget install OpenJS.NodeJS.LTS` on Windows).
+Requires Node 22.13+ (`winget install OpenJS.NodeJS.LTS` on Windows).
 
 ```sh
 npm install
@@ -39,15 +39,20 @@ and the last error.
 2. Open **Google Auth Platform**, choose **Get started**, and set the audience to **External**.
    Under **Data Access**, add only the scope `…/auth/calendar.readonly`.
    Under **Audience → Test users**, add your Gmail address.
-3. Under **Clients**, create a client with type **Desktop app**. Put its ID and secret in
-   `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-4. Run `npm run auth:google -w @planner/server` and approve in the browser. The refresh
-   token goes into Windows Credential Manager or macOS Keychain, or into the encrypted
-   token file when `TOKEN_STORE=file`.
+3. Under **Clients**, create a client with type **Web application**. Add the authorized
+   redirect URIs `http://localhost:5173/api/google/callback` (local) and
+   `https://<your-domain>/api/google/callback` (deployed). Put its ID and secret in `.env`
+   (and in Vercel) as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+4. In Planner, open **Settings → Sources → Connect Google** and approve. Only the refresh
+   token is kept: in Windows Credential Manager or macOS Keychain locally, or encrypted in the
+   database (`TOKEN_ENCRYPTION_KEY`) on Vercel.
 5. **Avoid the 7-day expiry.** While the app's publishing status is _Testing_, Google
    expires refresh tokens after 7 days. Go to **Audience → Publish app** (In
-   production), click through the "unverified app" warning, and **run step 4 again**.
+   production), click through the "unverified app" warning, and connect again.
    With a Google Workspace account, the alternative is to set the audience to _Internal_.
+
+`npm run auth:google -w @planner/server` (a terminal-based flow) still works with a **Desktop
+app** client, for local use.
 
 Planner never writes to Google: it only sends GET requests, and the scope is read-only.
 Recurring events are synced as individual instances.
@@ -106,65 +111,46 @@ structured item. If nothing usable comes out, the bot asks one clarifying questi
 Commands: `TODAY`, `DONE <n>`, `UNDO`, `HELP`. The **AI triage** switch in Settings
 turns model calls off.
 
-## Deploy (Fly.io)
+## Deploy (Vercel)
 
-**Why Fly.io:** It offers real persistent volumes for the SQLite file and a small
-always-on VM (around $3–5/month) that keeps the in-process sync scheduler running. It
-also provides managed TLS, health checks, `fly secrets`, and S3-compatible storage
-(Tigris) for Litestream backups. Render only has persistent disks on paid instances, and
-Railway's volumes are less mature. A single-writer SQLite app wants exactly one
-long-lived machine with one disk, which is what Fly gives you.
+Planner deploys to Vercel as a static web app plus one serverless function, with the data in
+**Turso** (hosted SQLite). Calendar sync, reminders, the digest and the nightly backup run when
+`/cron/tick` is called: by a free pinger (cron-job.org, every 5 minutes) and by Vercel's daily
+cron as a fallback. Telegram uses webhook mode. Nightly backups arrive as a JSON file in your
+Telegram chat.
 
-```sh
-fly launch --no-deploy --copy-config     # then set app/region names in fly.toml
-fly volumes create planner_data --size 1 --region ewr
-fly storage create                       # Tigris bucket; sets AWS_* secrets
-fly secrets set LITESTREAM_REPLICA_URL='s3://<bucket>/planner.db?endpoint=fly.storage.tigris.dev&region=auto'
-fly secrets set SESSION_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")"
-fly secrets set AUTH_PASSWORD_HASH="$(npm run -s hash-password -w @planner/server)"   # prompts, hidden
-fly secrets set TOKEN_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"
-fly secrets set TELEGRAM_BOT_TOKEN=… TELEGRAM_ALLOWED_USER_ID=… TELEGRAM_WEBHOOK_SECRET=…
-# plus whichever of GOOGLE_*, CANVAS_*, ANTHROPIC_API_KEY, TWILIO_* you use
-fly deploy
-npm run telegram -- set-webhook          # with PUBLIC_BASE_URL set locally to the Fly URL
-```
+**Step-by-step guide: [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).**
 
-**Google on the server:** the OAuth flow runs on your machine. Run it once into an
-encrypted file using the _same_ `TOKEN_ENCRYPTION_KEY` as the server, then upload the file:
+**Access control:** with `AUTH_MODE=password`, a single-user login page protects `/api/*`.
+The static app shell holds no data. With `AUTH_MODE=cloudflare`, the app sits behind
+Cloudflare Access. Only `/webhooks/*` (provider signatures), `/cron/*` (bearer secret) and
+`/health` are public. The server **refuses to start in production** without auth and an
+`https` `PUBLIC_BASE_URL`, and on Vercel without `TURSO_DATABASE_URL`, `CRON_SECRET` and
+`TOKEN_ENCRYPTION_KEY`.
 
-```sh
-TOKEN_STORE=file TOKEN_FILE_PATH=./tokens.enc.json TOKEN_ENCRYPTION_KEY=<same as Fly> npm run auth:google -w @planner/server
-fly sftp shell   # put apps/server/tokens.enc.json /data/tokens.enc.json
-```
-
-**Backups:** Litestream continuously replicates the database to Tigris, and a fresh volume
-restores from it on boot. To export tasks only, run
-`fly ssh console -C "node /app/apps/server/dist/backup.js --stdout" > tasks.json`.
-
-**Access control:** with `AUTH_MODE=password`, a single-user login page protects the UI
-and `/api/*`. With `AUTH_MODE=cloudflare`, the app sits behind Cloudflare Access; set
-`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`, and the app verifies the Access JWT. Only
-`/webhooks/*` and `/health` are public. The server **refuses to start in production**
-without auth and an `https` `PUBLIC_BASE_URL`.
+**Other hosts:** `npm run build && npm start` runs the same server as one long-lived Node
+process with in-process timers, Telegram polling or webhooks, live updates, and snapshot
+backups to `BACKUP_DIR`. The `Dockerfile` and `fly.toml` from the earlier Fly.io setup are
+kept for that route, but haven't been re-tested since the move to libSQL.
 
 ### Secrets
 
-| Secret                                        | Used for                                    | Notes                                                               |
-| --------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------- |
-| `SESSION_SECRET`                              | signing login sessions                      | ≥32 random chars; rotating it signs you out everywhere              |
-| `AUTH_PASSWORD_HASH`                          | single-user login                           | scrypt hash from `npm run hash-password`; never the password itself |
-| `TOKEN_ENCRYPTION_KEY`                        | encrypts OAuth refresh tokens on the volume | 32 random bytes, base64                                             |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`   | Google OAuth                                | Desktop client                                                      |
-| `CANVAS_TOKEN`                                | Canvas REST (read-only use)                 | or `CANVAS_ICS_URL` (also secret)                                   |
-| `ANTHROPIC_API_KEY`                           | message parser                              | optional                                                            |
-| `TELEGRAM_BOT_TOKEN`                          | Telegram Bot API                            | revoke with BotFather `/revoke`                                     |
-| `TELEGRAM_WEBHOOK_SECRET`                     | verifies Telegram webhook calls             | random, 16–256 chars                                                |
-| `TWILIO_AUTH_TOKEN`                           | verifies Twilio signatures, sends replies   | plus `TWILIO_ACCOUNT_SID`                                           |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Litestream → Tigris                         | set by `fly storage create`                                         |
+| Secret                                      | Used for                                     | Notes                                                               |
+| ------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`   | the hosted database                          | added by Vercel's Turso integration                                 |
+| `SESSION_SECRET`                            | signing login sessions                       | ≥32 random chars; rotating it signs you out everywhere              |
+| `AUTH_PASSWORD_HASH`                        | single-user login                            | scrypt hash from `npm run hash-password`; never the password itself |
+| `TOKEN_ENCRYPTION_KEY`                      | encrypts the Google refresh token            | 32 random bytes, base64                                             |
+| `CRON_SECRET`                               | authenticates `/cron/tick`                   | ≥16 random chars; also in the pinger's `Authorization` header       |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth                                 | Web application client                                              |
+| `CANVAS_TOKEN`                              | Canvas REST (read-only use)                  | or `CANVAS_ICS_URL` (also secret)                                   |
+| `ANTHROPIC_API_KEY`                         | message parser                               | optional                                                            |
+| `TELEGRAM_BOT_TOKEN`                        | Telegram Bot API (messages, alerts, backups) | revoke with BotFather `/revoke`                                     |
+| `TELEGRAM_WEBHOOK_SECRET`                   | verifies Telegram webhook calls              | random, 16–256 chars                                                |
+| `TWILIO_AUTH_TOKEN`                         | verifies Twilio signatures, sends replies    | plus `TWILIO_ACCOUNT_SID`                                           |
 
 Non-secret config (`PUBLIC_BASE_URL`, `APP_TIMEZONE`, `TELEGRAM_ALLOWED_USER_ID`,
-`OWNER_PHONE_E164`, …) lives in `fly.toml [env]` or as secrets. `.env.example` lists
-every variable.
+`OWNER_PHONE_E164`, …) goes in the same place. `.env.example` lists every variable.
 
 ## Threat model
 
@@ -172,7 +158,7 @@ every variable.
 Calendar access), the Canvas token (read access to your coursework and grades), the bot and Twilio
 credentials, and the Anthropic key (spend).
 
-**Trust boundaries:** the internet → Fly proxy (TLS) → app. Webhooks are public but signed;
+**Trust boundaries:** the internet → Vercel edge (TLS) → function → Turso. Webhooks are public but signed;
 everything else requires a session. External content (texts, Canvas descriptions, event
 text) is untrusted data.
 
@@ -181,12 +167,12 @@ text) is untrusted data.
 | **Someone spoofs your phone number** (caller-ID spoofing to the SMS number) | Requests need a valid `X-Twilio-Signature`, so only Twilio can call the webhook. The sender must equal `OWNER_PHONE_E164`.                                                                                                                                                               | SMS sender IDs can be spoofed at the carrier level, so Twilio might deliver a spoofed "from you" text. The worst case is a junk task or event, or an UNDO/DONE: the bot can only create one item, undo the last one, check one off, or read today's titles. Telegram identifies you by account, not number, so prefer it. Turning off AI triage limits spend. |
 | **The webhook URL leaks**                                                   | Telegram requests need the secret-token header and Twilio requests need the HMAC signature. Bad signatures get 403 and a throttled log line. Requests are rate limited per IP (60/min), bodies are capped at 64 KB, and provider message IDs are deduplicated, which also stops replays. | Signed requests from the real provider are still accepted, and the sender allowlist filters those. A flood of invalid requests costs little CPU.                                                                                                                                                                                                              |
 | **The Telegram bot token is stolen**                                        | The token alone can't make our webhook accept a message, since that needs the webhook secret.                                                                                                                                                                                            | An attacker could call `setWebhook` to redirect your updates (and read your texts to the bot) or send messages as the bot. Revoke with `/revoke`, rotate both secrets, and run `set-webhook` again.                                                                                                                                                           |
-| **The Google refresh token is stolen**                                      | It is encrypted at rest (AES-256-GCM, key in Fly secrets) and never logged. The scope is limited to `calendar.events` and `tasks`.                                                                                                                                                       | With the file and the key, someone could read and write your events and tasks. Revoke at myaccount.google.com → Security → Third-party access, or with `npm run auth:google -- --logout`.                                                                                                                                                                     |
+| **The Google refresh token is stolen**                                      | It is encrypted at rest (AES-256-GCM, key in Vercel environment variables) and never logged. The scope is `calendar.readonly`.                                                                                                                                                           | With the ciphertext and the key, someone could read your calendar (not change it). Revoke at myaccount.google.com → Security → Third-party access, or with Settings → Disconnect.                                                                                                                                                                             |
 | **The Canvas token is stolen**                                              | It is never logged, is sent only as a header to the configured origin, and pagination links to other hosts are refused.                                                                                                                                                                  | Canvas tokens aren't scope-limited, so someone with the token could also _write_ as you. Expire it in Canvas → Settings. The iCal fallback leaks less.                                                                                                                                                                                                        |
 | **The session cookie or password is stolen**                                | The cookie is HttpOnly, Secure and SameSite=Lax. Writes are checked for same origin. The CSP blocks script injection. Login is limited to 5 attempts per 15 minutes per IP.                                                                                                              | Sessions last 30 days. Rotate `SESSION_SECRET` to sign out everywhere, or use Cloudflare Access with MFA instead of a password.                                                                                                                                                                                                                               |
 | **Prompt injection via a message or Canvas text**                           | The parser can only output a strict zod schema, and the pipeline can only create one item or ask one ≤160-character question. Canvas descriptions are never stored, and the dev MCP server labels them `description_untrusted`.                                                          | A crafted text could produce an odd task title. That's visible and undoable.                                                                                                                                                                                                                                                                                  |
 | **Logs leak secrets or content**                                            | Logs carry only explicit fields, and errors go through a redactor (bearer, basic, `sk-ant-…`, Google and Telegram token shapes, credential query parameters). Message text is never logged or stored, only its length.                                                                   | Third-party library stack traces in unexpected crashes are caught by process-level handlers and sanitized.                                                                                                                                                                                                                                                    |
-| **Fly account compromise**                                                  | Use 2FA on Fly, Google, Canvas, Twilio, Telegram and Anthropic.                                                                                                                                                                                                                          | Everything above, since the account holds the secrets.                                                                                                                                                                                                                                                                                                        |
+| **Vercel or Turso account compromise**                                      | Use 2FA on Vercel, Turso, GitHub, Google, Canvas, Twilio, Telegram and Anthropic.                                                                                                                                                                                                        | Everything above, since the account holds the secrets.                                                                                                                                                                                                                                                                                                        |
 
 ## Development notes
 

@@ -13,12 +13,12 @@ export interface RestoreResult {
  * Replaces the database with a verified snapshot. The current database (and its WAL/SHM files)
  * is moved aside, never deleted. The server must be stopped while this runs.
  */
-export function restoreSnapshot(opts: {
+export async function restoreSnapshot(opts: {
   snapshot: string;
   dbPath: string;
   now?: Date;
-}): RestoreResult {
-  const counts = verifySnapshot(opts.snapshot); // throws on a missing or corrupt snapshot
+}): Promise<RestoreResult> {
+  const counts = await verifySnapshot(opts.snapshot); // throws on a missing or corrupt snapshot
   const stamp = (opts.now ?? new Date()).toISOString().replace(/[-:]/g, '').replace(/\..*/, '');
   let previous: string | null = null;
   if (fs.existsSync(opts.dbPath)) {

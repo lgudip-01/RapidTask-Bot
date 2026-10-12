@@ -120,7 +120,7 @@ describe('GoogleCalendarSource', () => {
 
   it('end to end through the scheduler: full then incremental', async () => {
     const api = calendarApi();
-    const env = makeTestEnv([source(api)]);
+    const env = await makeTestEnv([source(api)]);
 
     expect(await env.scheduler.run('google_calendar')).toMatchObject({ ok: true, upserted: 5 });
     expect(await env.scheduler.run('google_calendar')).toMatchObject({
@@ -129,7 +129,7 @@ describe('GoogleCalendarSource', () => {
       deleted: 1,
     });
 
-    const rows = env.db.select().from(calendarEvents).all();
+    const rows = await env.db.select().from(calendarEvents).all();
     expect(rows.map((r) => r.externalId).sort()).toEqual([
       'primary/allday1',
       'primary/london1',

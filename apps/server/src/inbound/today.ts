@@ -10,11 +10,11 @@ export interface TodayList {
 }
 
 /** Today's agenda as a short text: events as bullets, open tasks numbered (overdue last). */
-export function buildTodayList(db: Db, now: Date, timeZone: string): TodayList {
+export async function buildTodayList(db: Db, now: Date, timeZone: string): Promise<TodayList> {
   const today = dateInZone(now, timeZone);
   const from = startOfDateInZone(today, timeZone);
   const to = startOfDateInZone(addDays(today, 1), timeZone);
-  const items = queryAgenda(db, from, to, { includeOverdue: true, now });
+  const items = await queryAgenda(db, from, to, { includeOverdue: true, now });
 
   const events: string[] = [];
   const dueToday: { id: string; line: string }[] = [];

@@ -26,13 +26,13 @@ export function taskRoutes({ db, now }: AppDeps) {
   const find = (id: string) => db.select().from(tasks).where(eq(tasks.id, id)).get();
 
   return new Hono()
-    .get('/', (c) => {
+    .get('/', async (c) => {
       const q = ListQuerySchema.safeParse(c.req.query());
       if (!q.success) return badRequest(c, q.error);
       const where: SQL[] = [];
       if (q.data.source) where.push(eq(tasks.source, q.data.source));
       if (q.data.status) where.push(eq(tasks.status, q.data.status));
-      const rows = db
+      const rows = await db
         .select()
         .from(tasks)
         .where(and(...where))
@@ -46,8 +46,8 @@ export function taskRoutes({ db, now }: AppDeps) {
       return c.json<{ tasks: Task[] }>({ tasks: rows.map(toTaskJson) });
     })
 
-    .get('/:id', (c) => {
-      const row = find(c.req.param('id'));
+    .get('/:id', async (c) => {
+      const row = await find(c.req.param('id'));
       return row
         ? c.json<{ task: Task }>({ task: toTaskJson(row) })
         : c.json({ error: 'not_found' }, 404);
@@ -60,11 +60,13 @@ export function taskRoutes({ db, now }: AppDeps) {
       const at = now();
       const id = randomUUID();
       const top =
-        db
-          .select({ v: max(tasks.sortOrder) })
-          .from(tasks)
-          .get()?.v ?? 0;
-      const row = db
+        (
+          await db
+            .select({ v: max(tasks.sortOrder) })
+            .from(tasks)
+            .get()
+        )?.v ?? 0;
+      const row = await db
         .insert(tasks)
         .values({
           id,
@@ -90,7 +92,7 @@ export function taskRoutes({ db, now }: AppDeps) {
     })
 
     .patch('/:id', async (c) => {
-      const existing = find(c.req.param('id'));
+      const existing = await find(c.req.param('id'));
       if (!existing) return c.json({ error: 'not_found' }, 404);
       const body = TaskPatchSchema.safeParse(await readJson(c));
       if (!body.success) return badRequest(c, body.error);
@@ -109,7 +111,7 @@ export function taskRoutes({ db, now }: AppDeps) {
 
       const at = now();
       const statusChanged = p.status !== undefined && p.status !== existing.status;
-      const row = db
+      const row = await db
         .update(tasks)
         .set({
           ...(p.title !== undefined && { title: p.title }),
@@ -133,8 +135,8 @@ export function taskRoutes({ db, now }: AppDeps) {
       return c.json<{ task: Task }>({ task: toTaskJson(row!) });
     })
 
-    .delete('/:id', (c) => {
-      const existing = find(c.req.param('id'));
+    .delete('/:id', async (c) => {
+      const existing = await find(c.req.param('id'));
       if (!existing) return c.json({ error: 'not_found' }, 404);
       if (existing.source !== 'local') {
         return c.json(
@@ -142,7 +144,7 @@ export function taskRoutes({ db, now }: AppDeps) {
           403,
         );
       }
-      db.delete(tasks).where(eq(tasks.id, existing.id)).run();
+      await db.delete(tasks).where(eq(tasks.id, existing.id)).run();
       return c.body(null, 204);
     });
 }

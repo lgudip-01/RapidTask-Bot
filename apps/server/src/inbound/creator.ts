@@ -30,7 +30,8 @@ export class ItemCreator {
     const id = randomUUID();
 
     if (item.kind === 'event') {
-      db.insert(calendarEvents)
+      await db
+        .insert(calendarEvents)
         .values({
           id,
           source: 'local',
@@ -46,11 +47,14 @@ export class ItemCreator {
         .run();
     } else {
       const top =
-        db
-          .select({ v: max(tasks.sortOrder) })
-          .from(tasks)
-          .get()?.v ?? 0;
-      db.insert(tasks)
+        (
+          await db
+            .select({ v: max(tasks.sortOrder) })
+            .from(tasks)
+            .get()
+        )?.v ?? 0;
+      await db
+        .insert(tasks)
         .values({
           id,
           source: 'local',
@@ -73,13 +77,13 @@ export class ItemCreator {
   /** UNDO: deletes a captured item. */
   async remove(c: CaptureRow): Promise<void> {
     const table = c.kind === 'event' ? calendarEvents : tasks;
-    this.o.db.delete(table).where(eq(table.id, c.itemId)).run();
+    await this.o.db.delete(table).where(eq(table.id, c.itemId)).run();
   }
 
   /** DONE <n>: marks a task done; for Canvas assignments this is a Planner-only override. */
   async complete(t: TaskRow): Promise<void> {
     const at = this.o.now();
-    this.o.db
+    await this.o.db
       .update(tasks)
       .set({
         status: 'done',

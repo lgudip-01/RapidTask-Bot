@@ -18,24 +18,24 @@ function isOverdue(t: TaskRow, now: Date) {
  * Events overlapping [from, to) plus tasks due in [from, to), merged and sorted.
  * With `includeOverdue`, also open tasks due before `from`.
  */
-export function queryAgenda(
+export async function queryAgenda(
   db: Db,
   from: Date,
   to: Date,
   opts: { includeOverdue: boolean; now: Date },
-): AgendaItem[] {
-  const events = db
+): Promise<AgendaItem[]> {
+  const events = await db
     .select()
     .from(calendarEvents)
     .where(and(lt(calendarEvents.start, to), gt(calendarEvents.end, from)))
     .all();
-  const dueInRange = db
+  const dueInRange = await db
     .select()
     .from(tasks)
     .where(and(isNotNull(tasks.due), gte(tasks.due, from), lt(tasks.due, to)))
     .all();
   const overdue = opts.includeOverdue
-    ? db
+    ? await db
         .select()
         .from(tasks)
         .where(and(isNotNull(tasks.due), lt(tasks.due, from), ne(tasks.status, 'done')))

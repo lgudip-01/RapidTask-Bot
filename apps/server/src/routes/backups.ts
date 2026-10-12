@@ -4,11 +4,11 @@ import type { AppDeps } from '../app';
 /** Backup status for Settings, and a manual "Back up now". */
 export function backupRoutes({ backups }: AppDeps) {
   return new Hono()
-    .get('/', (c) => {
+    .get('/', async (c) => {
       if (!backups) return c.json({ error: 'backups_not_configured' }, 503);
       return c.json({
-        status: backups.status(),
-        recent: backups.recent(10).map((r) => ({
+        status: await backups.status(),
+        recent: (await backups.recent(10)).map((r) => ({
           ...r,
           startedAt: r.startedAt.toISOString(),
           finishedAt: r.finishedAt?.toISOString() ?? null,

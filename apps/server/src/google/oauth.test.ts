@@ -83,11 +83,11 @@ describe('Google OAuth', () => {
       json: { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' },
     }));
     const auth = new GoogleAuth(cfg, store, api);
-    await expect(auth.accessToken()).rejects.toThrow(/npm run auth:google/);
+    await expect(auth.accessToken()).rejects.toThrow(/Connect Google/);
 
     await store.set(REFRESH_TOKEN_KEY, '1//super-secret-refresh');
     const err = await auth.accessToken().catch((e: Error) => e);
-    expect((err as Error).message).toMatch(/expired or revoked.*npm run auth:google/);
+    expect((err as Error).message).toMatch(/expired or revoked.*Connect Google/);
     expect((err as Error).message).not.toContain('super-secret');
   });
 });

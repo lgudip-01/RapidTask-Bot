@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { Button, cx, ErrorState, Kbd, LoadingRows, Segmented, Switch } from '../components/ui';
 import { applyTheme, readThemePref, type ThemePref } from '../lib/hooks';
@@ -28,6 +28,7 @@ import {
   useSyncNow,
 } from '../lib/queries';
 import { fmtDay, fmtTime, relative } from '../lib/time';
+import { toast } from '../lib/toast';
 
 const ICONS: Record<IntegrationStatus['id'], ReactNode> = {
   google_calendar: <CalendarDays className="size-4" />,
@@ -134,7 +135,7 @@ function BackupsCard() {
               </p>
               <p className="mt-0.5 text-xs text-muted">
                 {s.enabled && s.nextScheduledAt
-                  ? `Next nightly backup: ${fmtDay(s.nextScheduledAt)}, ${fmtTime(s.nextScheduledAt)} · keeps the newest ${s.keep}`
+                  ? `Next nightly backup: ${fmtDay(s.nextScheduledAt)}, ${fmtTime(s.nextScheduledAt)} · ${s.target === 'telegram' ? 'sent to you on Telegram' : `keeps the newest ${s.keep}`}`
                   : 'Nightly backups are off (BACKUP_ENABLED=false).'}
               </p>
               {s.health === 'failed' && s.lastError && (
@@ -174,9 +175,18 @@ function BackupsCard() {
             </ul>
           )}
           <p className="text-xs text-muted">
-            Backups hold everything that lives only in Planner. To restore one, stop the server and
-            run <code className="rounded bg-surface-2 px-1">npm run restore -- --list</code> (see
-            docs/MANUAL-STEPS.md).
+            {s.target === 'telegram' ? (
+              <>
+                Backups hold everything that lives only in Planner. Each one arrives as a JSON file
+                in your Telegram chat with the bot (see docs/DEPLOY-VERCEL.md to restore).
+              </>
+            ) : (
+              <>
+                Backups hold everything that lives only in Planner. To restore one, stop the server
+                and run <code className="rounded bg-surface-2 px-1">npm run restore -- --list</code>{' '}
+                (see docs/MANUAL-STEPS.md).
+              </>
+            )}
           </p>
         </div>
       )}
@@ -228,6 +238,17 @@ function IntegrationRow({ i }: { i: IntegrationStatus }) {
             Sync now
           </Button>
         )}
+        {i.id === 'google_calendar' && i.configured && i.connected === false && (
+          <Button
+            size="sm"
+            onClick={() => {
+              // Full-page navigation: the server redirects to Google and back to Settings.
+              window.location.href = '/api/google/connect';
+            }}
+          >
+            Connect Google
+          </Button>
+        )}
         {i.id === 'google_calendar' && i.connected && (
           <Button
             size="sm"
@@ -244,7 +265,28 @@ function IntegrationRow({ i }: { i: IntegrationStatus }) {
   );
 }
 
+const GOOGLE_RESULT: Record<string, [ok: boolean, text: string]> = {
+  connected: [true, 'Google Calendar connected. Syncing now…'],
+  denied: [false, 'Google access was not granted.'],
+  expired: [false, 'That sign-in link expired. Try Connect Google again.'],
+  failed: [false, 'Could not finish connecting Google. Try again.'],
+};
+
+/** After the Google redirect (#/settings?google=…): say how it went, then tidy the URL. */
+function useGoogleConnectResult() {
+  useEffect(() => {
+    const q = window.location.hash.split('?')[1];
+    const result = q ? new URLSearchParams(q).get('google') : null;
+    const entry = result ? GOOGLE_RESULT[result] : undefined;
+    if (!entry) return;
+    if (entry[0]) toast.success(entry[1]);
+    else toast.error(entry[1]);
+    window.history.replaceState(null, '', '#/settings');
+  }, []);
+}
+
 export function SettingsView() {
+  useGoogleConnectResult();
   const integrations = useIntegrations();
   const settings = useSettings();
   const patch = usePatchSettings();
@@ -273,10 +315,9 @@ export function SettingsView() {
           ))}
         </ul>
         <p className="mt-3 text-xs text-muted">
-          Connecting a source happens on your machine: run{' '}
-          <code className="rounded bg-surface-2 px-1">npm run auth:google -w @planner/server</code>{' '}
-          for Google, and put Canvas details in{' '}
-          <code className="rounded bg-surface-2 px-1">.env</code>.
+          Connect Google with the button above (read-only calendar access). Canvas details go in the
+          server environment: <code className="rounded bg-surface-2 px-1">.env</code> locally, or
+          the Vercel project's environment variables when deployed.
         </p>
       </Card>
 

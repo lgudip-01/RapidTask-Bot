@@ -43,10 +43,10 @@ describe('Canvas iCal fallback', () => {
       { feedUrl: FEED, appTimeZone: 'America/New_York', intervalMs: 1_800_000 },
       fetchIcs,
     );
-    const env = makeTestEnv([source]);
+    const env = await makeTestEnv([source]);
 
     expect(await env.scheduler.run('canvas')).toMatchObject({ ok: true, upserted: 3 });
-    expect(env.db.select().from(tasks).all()).toEqual([
+    expect(await env.db.select().from(tasks).all()).toEqual([
       expect.objectContaining({
         externalId: 'assignment-1001',
         title: 'Problem Set 4',
@@ -55,7 +55,7 @@ describe('Canvas iCal fallback', () => {
         dueAllDay: false,
       }),
     ]);
-    const evs = env.db.select().from(calendarEvents).all();
+    const evs = await env.db.select().from(calendarEvents).all();
     expect(evs.map((e) => e.externalId).sort()).toEqual(['event-501', 'event-502']);
     expect(evs.find((e) => e.externalId === 'event-502')).toMatchObject({
       allDay: true,
@@ -68,9 +68,9 @@ describe('Canvas iCal fallback', () => {
       { feedUrl: FEED, appTimeZone: 'America/New_York', intervalMs: 1 },
       (async () => new Response('nope', { status: 401 })) as typeof fetch,
     );
-    const env = makeTestEnv([source]);
+    const env = await makeTestEnv([source]);
     const out = await env.scheduler.run('canvas');
     expect(out).toEqual({ ok: false, error: 'Error: Canvas calendar feed returned 401' });
-    expect(JSON.stringify(env.scheduler.status())).not.toContain('SECRETTOKEN');
+    expect(JSON.stringify(await env.scheduler.status())).not.toContain('SECRETTOKEN');
   });
 });

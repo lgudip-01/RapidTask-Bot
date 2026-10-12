@@ -32,7 +32,7 @@ function assertSyncable(source: Source) {
   if (source === 'local') throw new Error('sync sources may not write local items');
 }
 
-function upsertEvent(tx: Tx, e: EventInput, now: Date) {
+async function upsertEvent(tx: Tx, e: EventInput, now: Date) {
   const fields = {
     title: e.title,
     start: e.start,
@@ -45,13 +45,14 @@ function upsertEvent(tx: Tx, e: EventInput, now: Date) {
     updatedAt: e.updatedAt,
     syncedAt: now,
   };
-  tx.insert(calendarEvents)
+  await tx
+    .insert(calendarEvents)
     .values({ id: randomUUID(), source: e.source, externalId: e.externalId, ...fields })
     .onConflictDoUpdate({ target: [calendarEvents.source, calendarEvents.externalId], set: fields })
     .run();
 }
 
-function upsertTask(tx: Tx, t: TaskInput, now: Date) {
+async function upsertTask(tx: Tx, t: TaskInput, now: Date) {
   const fields = {
     title: t.title,
     notes: t.notes ?? null,
@@ -66,7 +67,8 @@ function upsertTask(tx: Tx, t: TaskInput, now: Date) {
     syncedAt: now,
   };
   const completedAt = t.completedAt ?? null;
-  tx.insert(tasks)
+  await tx
+    .insert(tasks)
     .values({
       id: randomUUID(),
       source: t.source,
@@ -88,7 +90,7 @@ function upsertTask(tx: Tx, t: TaskInput, now: Date) {
     .run();
 }
 
-function upsertCourse(tx: Tx, c: CourseInput, now: Date) {
+async function upsertCourse(tx: Tx, c: CourseInput, now: Date) {
   const fields = {
     name: c.name,
     courseCode: c.courseCode ?? null,
@@ -98,13 +100,14 @@ function upsertCourse(tx: Tx, c: CourseInput, now: Date) {
     url: c.url ?? null,
     syncedAt: now,
   };
-  tx.insert(courses)
+  await tx
+    .insert(courses)
     .values({ id: randomUUID(), source: c.source, externalId: c.externalId, ...fields })
     .onConflictDoUpdate({ target: [courses.source, courses.externalId], set: fields })
     .run();
 }
 
-function upsertAnnouncement(tx: Tx, a: AnnouncementInput, now: Date) {
+async function upsertAnnouncement(tx: Tx, a: AnnouncementInput, now: Date) {
   const fields = {
     title: a.title,
     courseName: a.courseName ?? null,
@@ -112,7 +115,8 @@ function upsertAnnouncement(tx: Tx, a: AnnouncementInput, now: Date) {
     url: a.url ?? null,
     syncedAt: now,
   };
-  tx.insert(announcements)
+  await tx
+    .insert(announcements)
     .values({ id: randomUUID(), source: a.source, externalId: a.externalId, ...fields })
     .onConflictDoUpdate({ target: [announcements.source, announcements.externalId], set: fields })
     .run();
@@ -120,7 +124,7 @@ function upsertAnnouncement(tx: Tx, a: AnnouncementInput, now: Date) {
 
 type Seen = Map<SyncEntity, Map<Source, string[]>>;
 
-function applyItems(tx: Tx, items: SyncItem[], now: Date) {
+async function applyItems(tx: Tx, items: SyncItem[], now: Date) {
   let upserted = 0;
   let deleted = 0;
   const seen: Seen = new Map();
@@ -136,17 +140,19 @@ function applyItems(tx: Tx, items: SyncItem[], now: Date) {
     if (item.kind === 'delete') {
       assertSyncable(item.source);
       const table = TABLES[item.entity];
-      deleted += tx
-        .delete(table)
-        .where(and(eq(table.source, item.source), eq(table.externalId, item.externalId)))
-        .run().changes;
+      deleted += (
+        await tx
+          .delete(table)
+          .where(and(eq(table.source, item.source), eq(table.externalId, item.externalId)))
+          .run()
+      ).rowsAffected;
       continue;
     }
     assertSyncable(item.data.source);
-    if (item.kind === 'event') upsertEvent(tx, item.data, now);
-    else if (item.kind === 'task') upsertTask(tx, item.data, now);
-    else if (item.kind === 'course') upsertCourse(tx, item.data, now);
-    else upsertAnnouncement(tx, item.data, now);
+    if (item.kind === 'event') await upsertEvent(tx, item.data, now);
+    else if (item.kind === 'task') await upsertTask(tx, item.data, now);
+    else if (item.kind === 'course') await upsertCourse(tx, item.data, now);
+    else await upsertAnnouncement(tx, item.data, now);
     remember(item.kind, item.data.source, item.data.externalId);
     upserted++;
   }
@@ -154,9 +160,9 @@ function applyItems(tx: Tx, items: SyncItem[], now: Date) {
 }
 
 /** Applies items outside a sync run (e.g. right after a write to Google), without touching cursors. */
-export function upsertItems(db: Db, items: SyncItem[], now: Date): ApplyResult {
-  return db.transaction((tx) => {
-    const { upserted, deleted } = applyItems(tx, items, now);
+export function upsertItems(db: Db, items: SyncItem[], now: Date): Promise<ApplyResult> {
+  return db.transaction(async (tx) => {
+    const { upserted, deleted } = await applyItems(tx, items, now);
     return { upserted, deleted };
   });
 }
@@ -165,9 +171,14 @@ export function upsertItems(db: Db, items: SyncItem[], now: Date): ApplyResult {
  * Stores one batch atomically: items, deletes, and the advanced cursor commit together,
  * so a failure anywhere leaves the previous cursor in place and nothing half-written.
  */
-export function applySyncBatch(db: Db, src: SyncSource, batch: SyncBatch, now: Date): ApplyResult {
-  return db.transaction((tx) => {
-    const applied = applyItems(tx, batch.items, now);
+export function applySyncBatch(
+  db: Db,
+  src: SyncSource,
+  batch: SyncBatch,
+  now: Date,
+): Promise<ApplyResult> {
+  return db.transaction(async (tx) => {
+    const applied = await applyItems(tx, batch.items, now);
     let { deleted } = applied;
 
     if (batch.fullResync) {
@@ -176,19 +187,22 @@ export function applySyncBatch(db: Db, src: SyncSource, batch: SyncBatch, now: D
         for (const source of owned) {
           assertSyncable(source);
           const keep = applied.seen.get(entity)?.get(source) ?? [];
-          deleted += tx
-            .delete(table)
-            .where(
-              keep.length
-                ? and(eq(table.source, source), notInArray(table.externalId, keep))
-                : eq(table.source, source),
-            )
-            .run().changes;
+          deleted += (
+            await tx
+              .delete(table)
+              .where(
+                keep.length
+                  ? and(eq(table.source, source), notInArray(table.externalId, keep))
+                  : eq(table.source, source),
+              )
+              .run()
+          ).rowsAffected;
         }
       }
     }
 
-    tx.insert(syncState)
+    await tx
+      .insert(syncState)
       .values({
         source: src.name,
         cursor: batch.nextCursor,
@@ -207,14 +221,14 @@ export function applySyncBatch(db: Db, src: SyncSource, batch: SyncBatch, now: D
 }
 
 /** Rows of `source` currently stored, keyed by externalId → id (for tests and diagnostics). */
-export function idsBySource(db: Db, sources: Source[]) {
+export async function idsBySource(db: Db, sources: Source[]) {
   return {
-    events: db
+    events: await db
       .select({ id: calendarEvents.id, externalId: calendarEvents.externalId })
       .from(calendarEvents)
       .where(inArray(calendarEvents.source, sources))
       .all(),
-    tasks: db
+    tasks: await db
       .select({ id: tasks.id, externalId: tasks.externalId })
       .from(tasks)
       .where(inArray(tasks.source, sources))

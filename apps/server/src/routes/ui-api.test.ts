@@ -20,15 +20,15 @@ const milk: ParsedMessage = {
   clarifyingQuestion: null,
 };
 
-function env() {
+async function env() {
   const calls: ExtractionInput[] = [];
-  const e = makeTestEnv([], '2026-10-09T16:00:00.000Z', (db, now) => {
+  const e = await makeTestEnv([], '2026-10-09T16:00:00.000Z', (db, now) => {
     const settings = new SettingsStore(db, now);
     return {
       capture: {
         parser: new MessageParser({
           llm: { extract: async (i) => (calls.push(i), milk) },
-          llmEnabled: () => settings.get().aiTriage,
+          llmEnabled: async () => (await settings.get()).aiTriage,
           timeZone: TZ,
           now,
         }),
@@ -41,7 +41,7 @@ function env() {
 
 describe('settings', () => {
   it('defaults, patches, and validates', async () => {
-    const e = env();
+    const e = await env();
     const defaults = {
       aiTriage: true,
       showGrades: false,
@@ -68,7 +68,7 @@ describe('settings', () => {
   });
 
   it('turning AI triage off stops model calls', async () => {
-    const e = env();
+    const e = await env();
     await e.json('PATCH', '/api/settings', { aiTriage: false });
     const res = await e.json('POST', '/api/capture', { text: 'buy milk' });
     expect(res.status).toBe(422);
@@ -79,7 +79,7 @@ describe('settings', () => {
 
 describe('quick-add', () => {
   it('previews without calling the model or creating anything', async () => {
-    const e = env();
+    const e = await env();
     const res = await e.json('POST', '/api/parse', { text: 'physics lab report thurs 5pm' });
     expect(res.body.preview).toEqual({
       type: 'capture',
@@ -96,11 +96,11 @@ describe('quick-add', () => {
       'error',
     );
     expect(e.calls).toHaveLength(0);
-    expect(e.db.select().from(tasks).all()).toHaveLength(0);
+    expect(await e.db.select().from(tasks).all()).toHaveLength(0);
   });
 
   it('captures with the model when needed', async () => {
-    const e = env();
+    const e = await env();
     const res = await e.json('POST', '/api/capture', { text: 'buy milk' });
     expect(res.status).toBe(201);
     expect(res.body.created).toMatchObject({ kind: 'task', source: 'local', title: 'Buy milk' });
@@ -109,8 +109,8 @@ describe('quick-add', () => {
 });
 
 describe('suggestions', () => {
-  function seed(e: ReturnType<typeof env>) {
-    e.db
+  async function seed(e: Awaited<ReturnType<typeof env>>) {
+    await e.db
       .insert(suggestions)
       .values([
         {
@@ -132,8 +132,8 @@ describe('suggestions', () => {
   }
 
   it('lists pending, accepts an edited item, and dismisses', async () => {
-    const e = env();
-    seed(e);
+    const e = await env();
+    await seed(e);
     expect(
       (await e.json('GET', '/api/suggestions')).body.suggestions.map((s: { id: string }) => s.id),
     ).toEqual(['s2', 's1']);
@@ -158,20 +158,16 @@ describe('suggestions', () => {
 
     expect((await e.json('POST', '/api/suggestions/s2/dismiss')).status).toBe(204);
     expect((await e.json('GET', '/api/suggestions')).body.suggestions).toEqual([]);
-    expect(
-      e.db
-        .select()
-        .from(suggestions)
-        .all()
-        .map((s) => s.status)
-        .sort(),
-    ).toEqual(['accepted', 'dismissed']);
+    expect((await e.db.select().from(suggestions).all()).map((s) => s.status).sort()).toEqual([
+      'accepted',
+      'dismissed',
+    ]);
   });
 });
 
 describe('search', () => {
   it('matches titles and treats % and _ literally', async () => {
-    const e = env();
+    const e = await env();
     await e.json('POST', '/api/tasks', { title: 'Grade 100% done' });
     await e.json('POST', '/api/tasks', { title: 'Grade1000 done' });
     await e.json('POST', '/api/tasks', { title: 'file_name fix' });

@@ -65,6 +65,24 @@ export class TelegramApi {
       link_preview_options: { is_disabled: true },
     });
   }
+  /** Sends a file (e.g. the nightly backup) to a chat as a document upload. */
+  async sendDocument(chatId: string, fileName: string, content: string, caption: string) {
+    const form = new FormData();
+    form.set('chat_id', chatId);
+    form.set('caption', caption.slice(0, 1000));
+    form.set('document', new Blob([content], { type: 'application/json' }), fileName);
+    const res = await this.fetchFn(`https://api.telegram.org/bot${this.token}/sendDocument`, {
+      method: 'POST',
+      body: form,
+    });
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    if (!res.ok || !json.ok) {
+      throw new TelegramApiError(
+        res.status,
+        `Telegram sendDocument ${res.status}: ${json.description ?? 'error'}`,
+      );
+    }
+  }
   getUpdates(offset: number | undefined, timeoutSec: number, signal?: AbortSignal) {
     return this.call<TgUpdate[]>(
       'getUpdates',

@@ -96,7 +96,7 @@ export class InboundPipeline {
 
     // Dedupe: providers retry deliveries with the same id.
     const inboundId = randomUUID();
-    const inserted = this.o.db
+    const inserted = await this.o.db
       .insert(inboundMessages)
       .values({
         id: inboundId,
@@ -107,18 +107,19 @@ export class InboundPipeline {
       })
       .onConflictDoNothing()
       .run();
-    if (inserted.changes === 0) {
+    if (inserted.rowsAffected === 0) {
       this.logDrop('duplicate', channel.name);
       return;
     }
 
     const sender = `${channel.name}:${msg.senderId}`;
-    const finish = (outcome: string, via: string | null = null) =>
-      this.o.db
+    const finish = async (outcome: string, via: string | null = null) => {
+      await this.o.db
         .update(inboundMessages)
         .set({ outcome, via, processedAt: this.o.now() })
         .where(eq(inboundMessages.id, inboundId))
         .run();
+    };
     const reply = async (text: string) => {
       try {
         await channel.reply(msg.senderId, text);
@@ -128,7 +129,7 @@ export class InboundPipeline {
     };
 
     if (!this.limiter.allow(sender)) {
-      finish('rate_limited');
+      await finish('rate_limited');
       this.logDrop('rate_limited', channel.name);
       return;
     }
@@ -137,7 +138,7 @@ export class InboundPipeline {
     if (command) {
       this.o.parser.clearPending(sender);
       const text = await this.runCommand(command, sender);
-      finish(`command_${command.type}`);
+      await finish(`command_${command.type}`);
       if (command.type === 'undo' || command.type === 'done') this.o.onChange?.('items');
       await reply(text);
       return;
@@ -148,7 +149,7 @@ export class InboundPipeline {
       case 'capture': {
         const created = await this.o.creator.create(out.item);
         const now = this.o.now();
-        this.o.db
+        await this.o.db
           .insert(captures)
           .values({
             id: randomUUID(),
@@ -161,8 +162,8 @@ export class InboundPipeline {
             createdAt: now,
           })
           .run();
-        this.resolveSuggestion(sender, 'accepted');
-        finish(`created_${created.kind}`, out.via);
+        await this.resolveSuggestion(sender, 'accepted');
+        await finish(`created_${created.kind}`, out.via);
         this.o.onChange?.('items');
         await reply(confirmationText(out.item, this.o.timeZone));
         return;
@@ -170,7 +171,7 @@ export class InboundPipeline {
       case 'clarify': {
         if (out.proposedTitle && !this.pendingSuggestion.has(sender)) {
           const id = randomUUID();
-          this.o.db
+          await this.o.db
             .insert(suggestions)
             .values({
               id,
@@ -182,28 +183,28 @@ export class InboundPipeline {
             .run();
           this.pendingSuggestion.set(sender, id);
         }
-        finish('clarify', 'llm');
+        await finish('clarify', 'llm');
         if (out.proposedTitle) this.o.onChange?.('suggestions');
         await reply(plain(out.question));
         return;
       }
       case 'off_topic':
         this.pendingSuggestion.delete(sender);
-        finish('off_topic');
+        await finish('off_topic');
         await reply(OFF_TOPIC_TEXT);
         return;
       case 'error':
         this.pendingSuggestion.delete(sender);
-        finish(`error_${out.reason}`);
+        await finish(`error_${out.reason}`);
         await reply(ERROR_REPLIES[out.reason]);
         return;
     }
   }
 
-  private resolveSuggestion(sender: string, status: 'accepted' | 'dismissed') {
+  private async resolveSuggestion(sender: string, status: 'accepted' | 'dismissed') {
     const id = this.pendingSuggestion.get(sender);
     if (!id) return;
-    this.o.db.update(suggestions).set({ status }).where(eq(suggestions.id, id)).run();
+    await this.o.db.update(suggestions).set({ status }).where(eq(suggestions.id, id)).run();
     this.pendingSuggestion.delete(sender);
   }
 
@@ -213,13 +214,13 @@ export class InboundPipeline {
       case 'help':
         return HELP_TEXT;
       case 'today': {
-        const list = buildTodayList(db, now(), timeZone);
+        const list = await buildTodayList(db, now(), timeZone);
         this.todaySnapshots.set(sender, { taskIds: list.taskIds, at: now().getTime() });
         return list.text;
       }
       case 'undo': {
         const since = new Date(now().getTime() - UNDO_WINDOW_MS);
-        const last = db
+        const last = await db
           .select()
           .from(captures)
           .where(and(isNull(captures.undoneAt), gt(captures.createdAt, since)))
@@ -227,7 +228,7 @@ export class InboundPipeline {
           .get();
         if (!last) return 'Nothing to undo.';
         await this.o.creator.remove(last);
-        db.update(captures).set({ undoneAt: now() }).where(eq(captures.id, last.id)).run();
+        await db.update(captures).set({ undoneAt: now() }).where(eq(captures.id, last.id)).run();
         return `Removed: ${last.title}`;
       }
       case 'done': {
@@ -235,10 +236,10 @@ export class InboundPipeline {
         const ids =
           snap && now().getTime() - snap.at < TODAY_SNAPSHOT_MS
             ? snap.taskIds
-            : buildTodayList(db, now(), timeZone).taskIds;
+            : (await buildTodayList(db, now(), timeZone)).taskIds;
         const id = ids[c.n - 1];
         if (!id) return `There's no task ${c.n} on today's list. Send TODAY to see it.`;
-        const task = db.select().from(tasks).where(eq(tasks.id, id)).get();
+        const task = await db.select().from(tasks).where(eq(tasks.id, id)).get();
         if (!task) return 'That task no longer exists. Send TODAY for a fresh list.';
         if (task.status === 'done') return `Already done: ${task.title}`;
         await this.o.creator.complete(task);

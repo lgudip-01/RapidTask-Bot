@@ -37,7 +37,7 @@ interface Pending {
 export interface MessageParserOptions {
   llm: LlmExtractor | null;
   /** Runtime switch (the "AI triage" setting). Defaults to on. */
-  llmEnabled?: () => boolean;
+  llmEnabled?: () => boolean | Promise<boolean>;
   timeZone: string;
   now: () => Date;
 }
@@ -86,7 +86,7 @@ export class MessageParser {
       if (fast) return this.toCapture(fast, 'fast', now);
     }
     const llm =
-      this.opts.llm && opts.allowLlm !== false && (this.opts.llmEnabled?.() ?? true)
+      this.opts.llm && opts.allowLlm !== false && ((await this.opts.llmEnabled?.()) ?? true)
         ? this.opts.llm
         : null;
     if (!llm) return { type: 'error', reason: 'llm_disabled' };

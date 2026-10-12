@@ -9,9 +9,9 @@ export class SettingsStore {
     private readonly now: () => Date,
   ) {}
 
-  get(): Settings {
+  async get(): Promise<Settings> {
     const merged: Record<string, unknown> = { ...DEFAULT_SETTINGS };
-    for (const row of this.db.select().from(settings).all()) {
+    for (const row of await this.db.select().from(settings).all()) {
       try {
         merged[row.key] = JSON.parse(row.value);
       } catch {
@@ -22,11 +22,11 @@ export class SettingsStore {
     return parsed.success ? parsed.data : DEFAULT_SETTINGS;
   }
 
-  patch(p: Partial<Settings>): Settings {
+  async patch(p: Partial<Settings>): Promise<Settings> {
     const at = this.now();
     for (const [key, value] of Object.entries(p)) {
       if (value === undefined) continue;
-      this.db
+      await this.db
         .insert(settings)
         .values({ key, value: JSON.stringify(value), updatedAt: at })
         .onConflictDoUpdate({

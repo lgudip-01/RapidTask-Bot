@@ -21,22 +21,29 @@ export function fakeSource(pagesFixture: string, name = 'fake') {
   });
 }
 
+type TestDepKeys =
+  | 'changes'
+  | 'backups'
+  | 'inbound'
+  | 'capture'
+  | 'security'
+  | 'webDist'
+  | 'cron'
+  | 'streaming'
+  | 'google'
+  | 'background';
+
 /** Manual clock + timer capture so scheduler tests are deterministic. */
-export function makeTestEnv(
+export async function makeTestEnv(
   sources: SyncSource[],
   startAt = '2026-10-09T16:00:00.000Z',
   extra:
-    | Partial<Pick<AppDeps, 'changes' | 'backups' | 'inbound' | 'capture' | 'security' | 'webDist'>>
-    | ((
-        db: Db,
-        now: () => Date,
-      ) => Partial<
-        Pick<AppDeps, 'changes' | 'backups' | 'inbound' | 'capture' | 'security' | 'webDist'>
-      >) = {},
+    | Partial<Pick<AppDeps, TestDepKeys>>
+    | ((db: Db, now: () => Date) => Partial<Pick<AppDeps, TestDepKeys>>) = {},
 ) {
   let nowMs = Date.parse(startAt);
   const timers: { fn: () => void; ms: number }[] = [];
-  const db = createDb(':memory:');
+  const db = await createDb(':memory:');
   const now = () => new Date(nowMs);
   const scheduler = new SyncScheduler(db, sources, {
     now,

@@ -25,10 +25,10 @@ export function suggestionRoutes({ db, capture, timeZone }: AppDeps) {
   const find = (id: string) => db.select().from(suggestions).where(eq(suggestions.id, id)).get();
 
   return new Hono()
-    .get('/', (c) => {
+    .get('/', async (c) => {
       const q = ListQuery.safeParse(c.req.query());
       if (!q.success) return badRequest(c, q.error);
-      const rows = db
+      const rows = await db
         .select()
         .from(suggestions)
         .where(eq(suggestions.status, q.data.status ?? 'pending'))
@@ -37,7 +37,7 @@ export function suggestionRoutes({ db, capture, timeZone }: AppDeps) {
       return c.json<{ suggestions: Suggestion[] }>({ suggestions: rows.map(toJson) });
     })
     .post('/:id/accept', async (c) => {
-      const s = find(c.req.param('id'));
+      const s = await find(c.req.param('id'));
       if (!s) return c.json({ error: 'not_found' }, 404);
       if (s.status !== 'pending') return c.json({ error: 'already_resolved' }, 409);
       if (!capture) return c.json({ error: 'capture_not_configured' }, 503);
@@ -80,13 +80,21 @@ export function suggestionRoutes({ db, capture, timeZone }: AppDeps) {
         };
       }
       const created = await capture.creator.create(item);
-      db.update(suggestions).set({ status: 'accepted' }).where(eq(suggestions.id, s.id)).run();
+      await db
+        .update(suggestions)
+        .set({ status: 'accepted' })
+        .where(eq(suggestions.id, s.id))
+        .run();
       return c.json({ created }, 201);
     })
-    .post('/:id/dismiss', (c) => {
-      const s = find(c.req.param('id'));
+    .post('/:id/dismiss', async (c) => {
+      const s = await find(c.req.param('id'));
       if (!s) return c.json({ error: 'not_found' }, 404);
-      db.update(suggestions).set({ status: 'dismissed' }).where(eq(suggestions.id, s.id)).run();
+      await db
+        .update(suggestions)
+        .set({ status: 'dismissed' })
+        .where(eq(suggestions.id, s.id))
+        .run();
       return c.body(null, 204);
     });
 }

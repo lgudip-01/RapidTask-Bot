@@ -68,10 +68,10 @@ export class SyncScheduler {
   }
 
   /** Schedules every source, resuming from a persisted `nextRunAt` (so backoff survives restarts). */
-  start() {
+  async start() {
     this.stopped = false;
     for (const name of this.bySource.keys()) {
-      const next = this.state(name)?.nextRunAt;
+      const next = (await this.state(name))?.nextRunAt;
       this.schedule(name, next ? Math.max(0, next.getTime() - this.now().getTime()) : 0);
     }
   }
@@ -82,10 +82,30 @@ export class SyncScheduler {
     this.timers.clear();
   }
 
-  status(): SyncStatus[] {
-    return [...this.bySource.keys()].map((name) =>
-      toSyncStatusJson(name, this.state(name), this.running.has(name)),
+  async status(): Promise<SyncStatus[]> {
+    return Promise.all(
+      [...this.bySource.keys()].map(async (name) =>
+        toSyncStatusJson(name, await this.state(name), this.running.has(name)),
+      ),
     );
+  }
+
+  /**
+   * Serverless: runs every source whose persisted `nextRunAt` has passed (or that never ran),
+   * one after another. Called from the cron endpoint instead of in-process timers.
+   */
+  async runDue(): Promise<Record<string, RunOutcome>> {
+    const out: Record<string, RunOutcome> = {};
+    for (const name of this.bySource.keys()) {
+      const next = (await this.state(name))?.nextRunAt;
+      if (next && next > this.now()) continue;
+      try {
+        out[name] = await this.run(name);
+      } catch (e) {
+        if (!(e instanceof AlreadyRunningError)) throw e;
+      }
+    }
+    return out;
   }
 
   /** Runs one source now. Throws UnknownSourceError / AlreadyRunningError; source failures are returned, not thrown. */
@@ -96,17 +116,17 @@ export class SyncScheduler {
     this.running.add(name);
     let delay = src.intervalMs;
     try {
-      const batch = await src.fetchSince(this.state(name)?.cursor ?? null);
-      const res = applySyncBatch(this.db, src, batch, this.now());
-      this.setNextRun(name, delay);
+      const batch = await src.fetchSince((await this.state(name))?.cursor ?? null);
+      const res = await applySyncBatch(this.db, src, batch, this.now());
+      await this.setNextRun(name, delay);
       log.info('sync ok', { source: name, upserted: res.upserted, deleted: res.deleted });
       if (res.upserted || res.deleted) this.onChange?.('sync');
       return { ok: true, ...res };
     } catch (e) {
       const error = sanitizeError(e);
-      const failures = (this.state(name)?.consecutiveFailures ?? 0) + 1;
+      const failures = ((await this.state(name))?.consecutiveFailures ?? 0) + 1;
       delay = nextDelay(src.intervalMs, failures, this.maxBackoffMs, this.random());
-      this.db
+      await this.db
         .insert(syncState)
         .values({ source: name, lastError: error, consecutiveFailures: failures })
         .onConflictDoUpdate({
@@ -114,7 +134,7 @@ export class SyncScheduler {
           set: { lastError: error, consecutiveFailures: failures },
         })
         .run();
-      this.setNextRun(name, delay);
+      await this.setNextRun(name, delay);
       log.warn('sync failed', { source: name, failures, error });
       return { ok: false, error };
     } finally {
@@ -127,9 +147,9 @@ export class SyncScheduler {
     return this.db.select().from(syncState).where(eq(syncState.source, name)).get();
   }
 
-  private setNextRun(name: string, delayMs: number) {
+  private async setNextRun(name: string, delayMs: number) {
     const nextRunAt = new Date(this.now().getTime() + delayMs);
-    this.db
+    await this.db
       .insert(syncState)
       .values({ source: name, nextRunAt })
       .onConflictDoUpdate({ target: syncState.source, set: { nextRunAt } })

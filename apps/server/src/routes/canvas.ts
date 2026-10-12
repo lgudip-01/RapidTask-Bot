@@ -14,21 +14,21 @@ const AnnouncementsQuery = z.object({ since: IsoDateTime.optional() });
 /** Read-only views of synced LMS data. Grades are omitted unless explicitly requested. */
 export function canvasRoutes({ db, now }: AppDeps) {
   return new Hono()
-    .get('/courses', (c) => {
+    .get('/courses', async (c) => {
       const q = CoursesQuery.safeParse(c.req.query());
       if (!q.success) return badRequest(c, q.error);
-      const rows = db.select().from(courses).orderBy(asc(courses.name)).all();
+      const rows = await db.select().from(courses).orderBy(asc(courses.name)).all();
       return c.json<{ courses: Course[] }>({
         courses: rows.map((r) => toCourseJson(r, q.data.includeGrades === 'true')),
       });
     })
-    .get('/announcements', (c) => {
+    .get('/announcements', async (c) => {
       const q = AnnouncementsQuery.safeParse(c.req.query());
       if (!q.success) return badRequest(c, q.error);
       const since = q.data.since
         ? new Date(q.data.since)
         : new Date(now().getTime() - 14 * 86_400_000);
-      const rows = db
+      const rows = await db
         .select()
         .from(announcements)
         .where(gte(announcements.postedAt, since))

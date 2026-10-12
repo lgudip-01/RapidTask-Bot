@@ -7,7 +7,7 @@ import type { InboundChannel, InboundRequest } from '../inbound/types';
  * The only unauthenticated routes. Each request must carry a valid provider signature; the
  * message is acknowledged immediately and processed asynchronously by the pipeline.
  */
-export function webhookRoutes({ inbound }: AppDeps) {
+export function webhookRoutes({ inbound, background }: AppDeps) {
   const app = new Hono();
   app.use('*', bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.body(null, 413) }));
 
@@ -25,7 +25,11 @@ export function webhookRoutes({ inbound }: AppDeps) {
         return c.body(null, 403);
       }
       const msg = channel.parseIncoming(req);
-      if (msg) void inbound.pipeline.submit(channel, msg);
+      if (msg) {
+        const work = inbound.pipeline.submit(channel, msg);
+        // Serverless: keep the function alive until the message is handled and answered.
+        if (background) background(work);
+      }
       const ack = channel.ack();
       return c.body(ack.body, 200, { 'content-type': ack.contentType });
     });

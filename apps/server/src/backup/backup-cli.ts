@@ -15,14 +15,13 @@ if (!fs.existsSync(env.DATABASE_PATH)) {
   console.error(`No database at ${path.resolve(env.DATABASE_PATH)}`);
   process.exit(1);
 }
-const db = createDb(env.DATABASE_PATH);
+const db = await createDb(env.DATABASE_PATH);
 
 if (process.argv.includes('--stdout')) {
-  process.stdout.write(JSON.stringify(exportData(db), null, 2) + '\n');
+  process.stdout.write(JSON.stringify(await exportData(db), null, 2) + '\n');
 } else {
   const service = new BackupService(db, {
-    dir: env.BACKUP_DIR,
-    keep: env.BACKUP_KEEP,
+    target: { kind: 'file', dir: env.BACKUP_DIR, keep: env.BACKUP_KEEP },
     hour: env.BACKUP_HOUR,
     timeZone: env.APP_TIMEZONE,
     enabled: true,

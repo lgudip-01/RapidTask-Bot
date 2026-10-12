@@ -22,26 +22,28 @@ const YEAR = 365 * 86_400_000;
 export function miscRoutes(deps: AppDeps) {
   const { db, now, settings } = deps;
   return new Hono()
-    .get('/settings', (c) => c.json<{ settings: Settings }>({ settings: settings.get() }))
+    .get('/settings', async (c) =>
+      c.json<{ settings: Settings }>({ settings: await settings.get() }),
+    )
     .patch('/settings', async (c) => {
       const body = SettingsPatchSchema.safeParse(await readJson(c));
       if (!body.success) return badRequest(c, body.error);
-      return c.json<{ settings: Settings }>({ settings: settings.patch(body.data) });
+      return c.json<{ settings: Settings }>({ settings: await settings.patch(body.data) });
     })
 
-    .get('/search', (c) => {
+    .get('/search', async (c) => {
       const q = SearchQuery.safeParse(c.req.query());
       if (!q.success) return badRequest(c, q.error);
       const pattern = `%${escapeLike(q.data.q)}%`;
       const t = now().getTime();
-      const taskRows = db
+      const taskRows = await db
         .select()
         .from(tasks)
         .where(contains(tasks.title, pattern))
         .orderBy(asc(tasks.status), asc(tasks.due))
         .limit(25)
         .all();
-      const eventRows = db
+      const eventRows = await db
         .select()
         .from(calendarEvents)
         .where(

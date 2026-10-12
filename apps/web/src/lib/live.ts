@@ -11,14 +11,15 @@ const STALE: Record<string, QueryKey[]> = {
   settings: [keys.settings],
 };
 
-const POLL_MS = 30_000;
+const POLL_MS = 15_000;
 
 export type LiveState = 'connecting' | 'live' | 'reconnecting' | 'polling';
 
 /**
  * Keeps every open view current. The server pushes a content-free "something changed" event over
  * Server-Sent Events (e.g. when the Telegram bot adds a task); the matching queries refetch.
- * Without EventSource it polls instead. After a dropped connection, everything is refetched.
+ * Without EventSource, or when the server declines streaming (204: serverless hosting), it polls
+ * instead. After a dropped connection, everything is refetched.
  */
 export function useLiveUpdates(): LiveState {
   const qc = useQueryClient();
@@ -33,6 +34,7 @@ export function useLiveUpdates(): LiveState {
     }
     const es = new EventSource('/api/stream');
     let dropped = false;
+    let poll: ReturnType<typeof setInterval> | null = null;
     es.addEventListener('change', (e) => {
       let topic = 'items';
       try {
@@ -48,10 +50,19 @@ export function useLiveUpdates(): LiveState {
       dropped = false;
     };
     es.onerror = () => {
+      // CLOSED means the server declined (no auto-reconnect): fall back to polling for good.
+      if (es.readyState === EventSource.CLOSED) {
+        setState('polling');
+        poll ??= setInterval(() => void qc.invalidateQueries(), POLL_MS);
+        return;
+      }
       dropped = true;
       setState('reconnecting');
     };
-    return () => es.close();
+    return () => {
+      es.close();
+      if (poll) clearInterval(poll);
+    };
   }, [qc]);
 
   return state;

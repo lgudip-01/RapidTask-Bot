@@ -18,8 +18,10 @@ import { agendaRoutes } from './routes/agenda';
 import { authRoutes } from './routes/auth';
 import { backupRoutes } from './routes/backups';
 import { canvasRoutes } from './routes/canvas';
+import { cronRoutes } from './routes/cron';
 import { captureRoutes } from './routes/capture';
 import { eventRoutes } from './routes/events';
+import { googleRoutes, type GoogleConnectDeps } from './routes/google';
 import { miscRoutes } from './routes/misc';
 import { suggestionRoutes } from './routes/suggestions';
 import { syncRoutes } from './routes/sync';
@@ -60,6 +62,20 @@ export interface AppDeps {
   security?: SecurityConfig;
   /** Built web UI to serve (production). */
   webDist?: string;
+  /** Browser-based "Connect Google" (present when GOOGLE_CLIENT_ID/SECRET are set). */
+  google?: GoogleConnectDeps;
+  /**
+   * Keeps work alive after the response (Vercel `waitUntil`). Without it, work after the response
+   * just runs on the long-lived process.
+   */
+  background?: (work: Promise<unknown>) => void;
+  /** Serverless heartbeat behind a bearer secret (/cron/tick). */
+  cron?: { secret: string; tick: () => Promise<unknown> };
+  /**
+   * Live updates over Server-Sent Events need one long-lived process. False on serverless: the
+   * stream answers 204 and the web UI polls instead.
+   */
+  streaming?: boolean;
 }
 
 export function createApp(deps: AppDeps) {
@@ -81,6 +97,16 @@ export function createApp(deps: AppDeps) {
         windowMs: 60_000,
         trustProxy: sec.trustProxy,
         name: 'webhooks',
+        now: sec.now,
+      }),
+    );
+    app.use(
+      '/cron/*',
+      ipRateLimit({
+        limit: sec.webhookRateLimitPerMin,
+        windowMs: 60_000,
+        trustProxy: sec.trustProxy,
+        name: 'cron',
         now: sec.now,
       }),
     );
@@ -120,23 +146,25 @@ export function createApp(deps: AppDeps) {
 
   /** Live "something changed" notifications for the web UI. Carries no item content. */
   app.get('/api/stream', (c) =>
-    streamSSE(c, async (stream) => {
-      const off = deps.changes?.subscribe((e) => {
-        void stream.writeSSE({ event: 'change', id: String(e.seq), data: JSON.stringify(e) });
-      });
-      stream.onAbort(() => off?.());
-      while (!stream.aborted && !stream.closed) {
-        await stream.writeSSE({ event: 'ping', data: '' });
-        await stream.sleep(25_000);
-      }
-      off?.();
-    }),
+    deps.streaming === false
+      ? c.body(null, 204)
+      : streamSSE(c, async (stream) => {
+          const off = deps.changes?.subscribe((e) => {
+            void stream.writeSSE({ event: 'change', id: String(e.seq), data: JSON.stringify(e) });
+          });
+          stream.onAbort(() => off?.());
+          while (!stream.aborted && !stream.closed) {
+            await stream.writeSSE({ event: 'ping', data: '' });
+            await stream.sleep(25_000);
+          }
+          off?.();
+        }),
   );
 
   /** Liveness + database check for the platform health check (no auth, no details). */
-  app.get('/health', (c) => {
+  app.get('/health', async (c) => {
     try {
-      deps.db.run(sql`select 1`);
+      await deps.db.run(sql`select 1`);
       return c.json({ ok: true });
     } catch {
       return c.json({ ok: false }, 503);
@@ -152,10 +180,12 @@ export function createApp(deps: AppDeps) {
   app.route('/api/events', eventRoutes(deps));
   app.route('/api/backups', backupRoutes(deps));
   app.route('/api/suggestions', suggestionRoutes(deps));
+  app.route('/api/google', googleRoutes(deps));
   app.route('/api', canvasRoutes(deps));
   app.route('/api', captureRoutes(deps));
   app.route('/api', miscRoutes(deps));
   app.route('/webhooks', webhookRoutes(deps));
+  app.route('/cron', cronRoutes(deps));
   app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));
 
   if (deps.webDist) {

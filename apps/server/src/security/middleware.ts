@@ -22,9 +22,18 @@ export interface SecurityConfig {
   now?: () => number;
 }
 
-/** Paths reachable without a session. Webhooks authenticate with provider signatures instead. */
+/**
+ * Paths reachable without a session. Webhooks authenticate with provider signatures, cron with a
+ * bearer secret.
+ */
 /** /login and /auth/login exist only in password mode (rate limited); they reveal nothing. */
-export const PUBLIC_PATHS = [/^\/webhooks\//, /^\/health$/, /^\/login$/, /^\/auth\/login$/];
+export const PUBLIC_PATHS = [
+  /^\/webhooks\//,
+  /^\/cron\//,
+  /^\/health$/,
+  /^\/login$/,
+  /^\/auth\/login$/,
+];
 const isPublic = (path: string) => PUBLIC_PATHS.some((re) => re.test(path));
 
 export const SESSION_COOKIE = 'planner_session';

@@ -18,7 +18,7 @@ if (args.includes('--reset'))
   for (const f of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) fs.rmSync(f, { force: true });
 
 const tz = process.env.APP_TIMEZONE ?? 'America/New_York';
-const db = createDb(dbPath);
+const db = await createDb(dbPath);
 const now = new Date();
 const today = dateInZone(now, tz);
 const day = (offset: number) => addDays(today, offset);
@@ -186,7 +186,7 @@ const items: SyncItem[] = [
     },
   },
 ];
-upsertItems(db, items, now);
+await upsertItems(db, items, now);
 
 const local = (
   id: string,
@@ -209,7 +209,8 @@ const local = (
   syncedAt: updatedAt,
   completedAt: status === 'done' ? updatedAt : null,
 });
-db.insert(tasks)
+await db
+  .insert(tasks)
   .values([
     local('seed-local-1', 'Pay rent', midnight(-3), 'todo', 1),
     local('seed-local-2', 'Water plants', midnight(1), 'todo', 2),
@@ -222,7 +223,8 @@ db.insert(tasks)
   .onConflictDoNothing()
   .run();
 
-db.insert(suggestions)
+await db
+  .insert(suggestions)
   .values([
     {
       id: 'seed-s1',
@@ -252,7 +254,8 @@ db.insert(suggestions)
   .onConflictDoNothing()
   .run();
 
-db.insert(syncState)
+await db
+  .insert(syncState)
   .values([
     {
       source: 'google_calendar',

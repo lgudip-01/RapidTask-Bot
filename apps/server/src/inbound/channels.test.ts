@@ -28,7 +28,7 @@ describe('Twilio signature', () => {
   });
 
   it('accepts a valid signature and replies via the REST API', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const res = await h.postTwilio(twilioFixture());
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/xml');
@@ -47,7 +47,7 @@ describe('Twilio signature', () => {
     ['different URL', 'url'],
     ['tampered body', 'tamper'],
   ])('rejects a %s signature with 403 and does nothing', async (_name, kind) => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const body = twilioFixture();
     let signature: string | null = null;
     let sent = body;
@@ -58,31 +58,31 @@ describe('Twilio signature', () => {
       sent = body.replace('call+mom+tomorrow', 'delete+everything');
     }
     expect((await h.postTwilio(sent, signature)).status).toBe(403);
-    expect(h.db.select().from(inboundMessages).all()).toHaveLength(0);
+    expect(await h.db.select().from(inboundMessages).all()).toHaveLength(0);
     expect(h.smsReplies()).toHaveLength(0);
   });
 
   it('a replayed (validly signed) request is deduplicated by MessageSid', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const body = twilioFixture();
     await h.postTwilio(body);
     const replay = await h.postTwilio(body);
     expect(replay.status).toBe(200);
-    expect(h.db.select().from(tasks).all()).toHaveLength(1);
-    expect(h.db.select().from(inboundMessages).all()).toHaveLength(1);
+    expect(await h.db.select().from(tasks).all()).toHaveLength(1);
+    expect(await h.db.select().from(inboundMessages).all()).toHaveLength(1);
     expect(h.smsReplies()).toHaveLength(1);
   });
 
   it('drops SMS from any number but the owner, silently', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const body = twilioFixture().replace('From=%2B15555550123', 'From=%2B15555550999');
     expect((await h.postTwilio(body)).status).toBe(200);
     expect(h.smsReplies()).toHaveLength(0);
-    expect(h.db.select().from(inboundMessages).all()).toHaveLength(0);
+    expect(await h.db.select().from(inboundMessages).all()).toHaveLength(0);
   });
 
   it('ignores requests for another Twilio account', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const body = twilioFixture().replace(TWILIO.accountSid, 'ACbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
     expect((await h.postTwilio(body)).status).toBe(200);
     expect(h.smsReplies()).toHaveLength(0);
@@ -96,7 +96,7 @@ describe('Twilio signature', () => {
 
 describe('Telegram webhook', () => {
   it('accepts the secret-token header and replies in the chat', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const res = await h.postTelegram(loadFixture('inbound/telegram-text.json'));
     expect(res.status).toBe(200);
     expect(h.telegramReplies()).toEqual([
@@ -105,7 +105,7 @@ describe('Telegram webhook', () => {
     const call = h.telegramApi.calls[0]!;
     expect(call.url.pathname).toBe('/bot123:test-bot-token/sendMessage');
     expect(call.body).toMatchObject({ chat_id: OWNER_TG });
-    expect(h.db.select().from(calendarEvents).all()).toHaveLength(1);
+    expect(await h.db.select().from(calendarEvents).all()).toHaveLength(1);
   });
 
   it.each([
@@ -113,30 +113,30 @@ describe('Telegram webhook', () => {
     ['wrong', 'wrong_secret_0123456789abcdef'],
     ['prefix of the real one', 'test_webhook_secret_01234'],
   ])('rejects a %s secret token with 403', async (_n, secret) => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     expect((await h.postTelegram(loadFixture('inbound/telegram-text.json'), secret)).status).toBe(
       403,
     );
-    expect(h.db.select().from(inboundMessages).all()).toHaveLength(0);
+    expect(await h.db.select().from(inboundMessages).all()).toHaveLength(0);
     expect(h.telegramReplies()).toHaveLength(0);
   });
 
   it('deduplicates Telegram retries of the same update_id', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     const update = loadFixture('inbound/telegram-text.json');
     for (let i = 0; i < 3; i++) expect((await h.postTelegram(update)).status).toBe(200);
-    expect(h.db.select().from(calendarEvents).all()).toHaveLength(1);
+    expect(await h.db.select().from(calendarEvents).all()).toHaveLength(1);
     expect(h.telegramReplies()).toHaveLength(1);
   });
 
   it('drops strangers, group chats, and non-text updates silently', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     for (const f of ['telegram-stranger', 'telegram-group', 'telegram-photo']) {
       expect((await h.postTelegram(loadFixture(`inbound/${f}.json`))).status).toBe(200);
     }
     expect(h.telegramReplies()).toHaveLength(0);
-    expect(h.db.select().from(inboundMessages).all()).toHaveLength(0);
-    expect(h.db.select().from(tasks).all()).toHaveLength(0);
+    expect(await h.db.select().from(inboundMessages).all()).toHaveLength(0);
+    expect(await h.db.select().from(tasks).all()).toHaveLength(0);
   });
 
   it('maps updates to messages', () => {

@@ -16,9 +16,18 @@ const EnvSchema = z
     HEALTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
     APP_TIMEZONE: z.string().default('America/New_York'),
     DATABASE_PATH: z.string().default('./data/planner.db'),
+    /** Hosted database (Turso). Set by Vercel's Turso integration; wins over DATABASE_PATH. */
+    TURSO_DATABASE_URL: optionalString,
+    TURSO_AUTH_TOKEN: optionalString,
+    /** Set by Vercel on its build and functions: no disk, no long-running process. */
+    VERCEL: optionalString,
+    /** Bearer secret for /cron/tick (Vercel Cron and outside pingers send `Authorization: Bearer`). */
+    CRON_SECRET: optionalString.pipe(z.string().min(16).optional()),
 
     // Nightly backups: the database is the only copy of Planner-only tasks and events.
     BACKUP_ENABLED: z.stringbool().default(true),
+    /** file = snapshots in BACKUP_DIR; telegram = the JSON export is sent to the owner. auto: telegram on Vercel. */
+    BACKUP_TARGET: z.enum(['auto', 'file', 'telegram']).default('auto'),
     BACKUP_DIR: z.string().default('./data/backups'),
     /** Local hour (APP_TIMEZONE) for the nightly backup. */
     BACKUP_HOUR: z.coerce.number().int().min(0).max(23).default(3),
@@ -31,7 +40,8 @@ const EnvSchema = z
     WRITE_EVENTS_TO_GOOGLE: z.stringbool().default(false),
 
     // Token storage for OAuth refresh tokens.
-    TOKEN_STORE: z.enum(['auto', 'keyring', 'file']).default('auto'),
+    /** auto: OS keyring, else the encrypted file; on Vercel, encrypted rows in the database (db). */
+    TOKEN_STORE: z.enum(['auto', 'keyring', 'file', 'db']).default('auto'),
     TOKEN_FILE_PATH: z.string().default('./data/tokens.enc.json'),
     TOKEN_ENCRYPTION_KEY: optionalString,
 
@@ -141,9 +151,22 @@ const EnvSchema = z
       need('PUBLIC_BASE_URL', e.PUBLIC_BASE_URL?.startsWith('https://'));
       if (e.TOKEN_STORE !== 'keyring') need('TOKEN_ENCRYPTION_KEY', e.TOKEN_ENCRYPTION_KEY);
     }
+    if (e.VERCEL) {
+      // Serverless: the local disk is temporary and nothing runs between requests.
+      need('TURSO_DATABASE_URL', e.TURSO_DATABASE_URL);
+      need('CRON_SECRET', e.CRON_SECRET);
+      need('TOKEN_ENCRYPTION_KEY', e.TOKEN_ENCRYPTION_KEY);
+      if (e.TELEGRAM_BOT_TOKEN) {
+        need('TELEGRAM_MODE', e.TELEGRAM_MODE === 'webhook');
+        need('TELEGRAM_WEBHOOK_SECRET', e.TELEGRAM_WEBHOOK_SECRET);
+      }
+    }
   });
 
 export type Env = z.infer<typeof EnvSchema>;
+
+/** Serverless (Vercel) vs a long-running Node process. */
+export const isServerless = (e: Env) => Boolean(e.VERCEL);
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = EnvSchema.safeParse(source);

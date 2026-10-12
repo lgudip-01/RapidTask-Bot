@@ -185,7 +185,9 @@ describe('Settings: notifications', () => {
 
 /** Minimal EventSource stand-in: tests push server events by hand. */
 class FakeEventSource {
+  static CLOSED = 2;
   static last: FakeEventSource | null = null;
+  readyState = 0;
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   private listeners = new Map<string, ((e: { data: string }) => void)[]>();
@@ -345,6 +347,64 @@ describe('live updates', () => {
     act(() => FakeEventSource.last!.emit('change', JSON.stringify({ seq: 1, topic: 'items' })));
     expect(await screen.findByText('Call the landlord')).toBeTruthy();
     vi.unstubAllGlobals();
+  });
+
+  it('polls when the server declines streaming (serverless hosting)', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-10-09T16:00:00.000Z'));
+    let items = agendaToday;
+    renderApp({ 'GET /api/agenda': () => ({ items }) });
+    await screen.findByText('Problem Set 4');
+    // A 204 from /api/stream closes the EventSource for good.
+    act(() => {
+      FakeEventSource.last!.readyState = FakeEventSource.CLOSED;
+      FakeEventSource.last!.onerror?.();
+    });
+    expect(await screen.findByText('Auto-refresh')).toBeTruthy();
+
+    items = [
+      ...agendaToday,
+      {
+        kind: 'task',
+        at: '2026-10-09T21:00:00.000Z',
+        overdue: false,
+        item: {
+          ...localTask,
+          id: 't-polled',
+          title: 'Renew passport',
+          due: '2026-10-09T21:00:00.000Z',
+          dueAllDay: false,
+        },
+      },
+    ];
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(await screen.findByText('Renew passport')).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('Settings: Connect Google', () => {
+  it('offers Connect Google when configured but not connected, and reports the result', async () => {
+    renderApp({
+      'GET /api/status': () => ({
+        integrations: [
+          {
+            id: 'google_calendar',
+            label: 'Google Calendar',
+            configured: true,
+            detail: 'db',
+            connected: false,
+            sync: null,
+            help: 'Not connected yet: use Connect Google.',
+          },
+        ],
+      }),
+    });
+    window.location.hash = '#/settings?google=connected';
+    expect(await screen.findByRole('button', { name: 'Connect Google' })).toBeTruthy();
+    expect(await screen.findByText('Google Calendar connected. Syncing now…')).toBeTruthy();
+    expect(window.location.hash).toBe('#/settings');
   });
 });
 

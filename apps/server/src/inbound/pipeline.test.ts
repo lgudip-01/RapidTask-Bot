@@ -36,23 +36,23 @@ describe('commands', () => {
   ])('%j → %j', (text, cmd) => expect(parseCommand(text)).toEqual(cmd));
 
   it('HELP replies with the fixed help text', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     expect(await h.say('HELP')).toBe(HELP_TEXT);
   });
 
   it('UNDO removes the most recent capture, then has nothing left', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     await h.say('call mom tomorrow');
     await h.say('dentist tues 3pm');
     expect(await h.say('UNDO')).toBe('Removed: Dentist');
-    expect(h.db.select().from(calendarEvents).all()).toHaveLength(0);
+    expect(await h.db.select().from(calendarEvents).all()).toHaveLength(0);
     expect(await h.say('undo')).toBe('Removed: Call mom');
-    expect(h.db.select().from(tasks).all()).toHaveLength(0);
+    expect(await h.db.select().from(tasks).all()).toHaveLength(0);
     expect(await h.say('UNDO')).toBe('Nothing to undo.');
   });
 
   it('TODAY lists events and numbers open tasks; DONE <n> checks one off', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     await h.say('gym 6pm');
     await h.say('submit form by 5pm');
     await h.json('POST', '/api/tasks', { title: 'Old thing', due: '2026-10-07T04:00:00Z' });
@@ -71,29 +71,31 @@ describe('commands', () => {
     );
 
     expect(await h.say('DONE 2')).toBe('Done: Old thing ✓');
-    expect(h.db.select().from(tasks).where(eq(tasks.title, 'Old thing')).get()).toMatchObject({
-      status: 'done',
-    });
+    expect(await h.db.select().from(tasks).where(eq(tasks.title, 'Old thing')).get()).toMatchObject(
+      {
+        status: 'done',
+      },
+    );
     expect(await h.say('DONE 2')).toBe('Already done: Old thing');
     expect(await h.say('DONE 9')).toBe("There's no task 9 on today's list. Send TODAY to see it.");
   });
 
   it('TODAY with nothing on', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     expect(await h.say('TODAY')).toBe('Today, Fri, Oct 9\nNothing scheduled.');
   });
 });
 
 describe('capture pipeline', () => {
   it('replies to off-topic messages with a fixed text and creates nothing', async () => {
-    const h = inboundHarness({ llm: llmFrom(() => offTopic) });
+    const h = await inboundHarness({ llm: llmFrom(() => offTopic) });
     expect(await h.say('tell me a joke about calendars')).toBe(OFF_TOPIC_TEXT);
-    expect(h.db.select().from(tasks).all()).toHaveLength(0);
-    expect(h.db.select().from(inboundMessages).get()).toMatchObject({ outcome: 'off_topic' });
+    expect(await h.db.select().from(tasks).all()).toHaveLength(0);
+    expect(await h.db.select().from(inboundMessages).get()).toMatchObject({ outcome: 'off_topic' });
   });
 
   it('asks a clarifying question, files a suggestion, and completes on the answer', async () => {
-    const h = inboundHarness({
+    const h = await inboundHarness({
       llm: llmFrom((i) =>
         i.clarification
           ? {
@@ -114,7 +116,7 @@ describe('capture pipeline', () => {
       ),
     });
     expect(await h.say('meeting')).toBe('When is the meeting?');
-    expect(h.db.select().from(suggestions).get()).toMatchObject({
+    expect(await h.db.select().from(suggestions).get()).toMatchObject({
       proposedTitle: 'Meeting',
       status: 'pending',
     });
@@ -122,43 +124,35 @@ describe('capture pipeline', () => {
     expect(await h.say('tues 2pm')).toBe(
       'Added event: Meeting — Tue, Oct 13, 2:00–3:00 PM. Reply UNDO to remove.',
     );
-    expect(h.db.select().from(suggestions).get()).toMatchObject({ status: 'accepted' });
+    expect(await h.db.select().from(suggestions).get()).toMatchObject({ status: 'accepted' });
   });
 
   it('rate limits per sender and records it', async () => {
-    const h = inboundHarness({ rateLimit: { limit: 3, windowMs: 600_000 } });
+    const h = await inboundHarness({ rateLimit: { limit: 3, windowMs: 600_000 } });
     for (const t of ['HELP', 'HELP', 'HELP', 'HELP']) await h.say(t);
     expect(h.telegramReplies()).toHaveLength(3);
-    const outcomes = h.db
-      .select()
-      .from(inboundMessages)
-      .all()
-      .map((r) => r.outcome);
+    const outcomes = (await h.db.select().from(inboundMessages).all()).map((r) => r.outcome);
     expect(outcomes.filter((o) => o === 'rate_limited')).toHaveLength(1);
   });
 
   it('never stores message text', async () => {
-    const h = inboundHarness({ llm: llmFrom(() => offTopic) });
+    const h = await inboundHarness({ llm: llmFrom(() => offTopic) });
     await h.say('zebra-sentinel-42 says hello');
     await h.say('zebra-sentinel-43 call mom tomorrow');
     const dump = JSON.stringify([
-      h.db.select().from(inboundMessages).all(),
-      h.db.select().from(captures).all(),
-      h.db.select().from(suggestions).all(),
+      await h.db.select().from(inboundMessages).all(),
+      await h.db.select().from(captures).all(),
+      await h.db.select().from(suggestions).all(),
     ]);
     expect(dump).not.toContain('zebra-sentinel-42');
     expect(dump).not.toContain('says hello');
-    expect(
-      h.db
-        .select()
-        .from(inboundMessages)
-        .all()
-        .map((r) => r.textLength),
-    ).toEqual([28, 35]);
+    expect((await h.db.select().from(inboundMessages).all()).map((r) => r.textLength)).toEqual([
+      28, 35,
+    ]);
   });
 
   it('explains when the model is unavailable', async () => {
-    const h = inboundHarness({
+    const h = await inboundHarness({
       llm: { extract: async () => Promise.reject(new Error('ECONNRESET')) },
     });
     expect(await h.say('buy milk')).toBe(
@@ -169,29 +163,32 @@ describe('capture pipeline', () => {
 
 describe('local-first capture', () => {
   it('stores texted events and tasks only in Planner, and UNDO removes them', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     expect(await h.say('dentist tues 3pm')).toBe(
       'Added event: Dentist — Tue, Oct 13, 3:00–4:00 PM. Reply UNDO to remove.',
     );
-    expect(h.db.select().from(calendarEvents).get()).toMatchObject({
+    expect(await h.db.select().from(calendarEvents).get()).toMatchObject({
       source: 'local',
       title: 'Dentist',
     });
     expect(await h.say('call mom tomorrow')).toBe(
       'Added task: Call mom — due Sat, Oct 10. Reply UNDO to remove.',
     );
-    expect(h.db.select().from(tasks).get()).toMatchObject({ source: 'local', status: 'todo' });
+    expect(await h.db.select().from(tasks).get()).toMatchObject({
+      source: 'local',
+      status: 'todo',
+    });
 
     expect(await h.say('/undo')).toBe('Removed: Call mom');
     expect(await h.say('UNDO')).toBe('Removed: Dentist');
-    expect(h.db.select().from(calendarEvents).all()).toHaveLength(0);
-    expect(h.db.select().from(tasks).all()).toHaveLength(0);
+    expect(await h.db.select().from(calendarEvents).all()).toHaveLength(0);
+    expect(await h.db.select().from(tasks).all()).toHaveLength(0);
   });
 
   it('texted tasks can be completed from the UI or with /done', async () => {
-    const h = inboundHarness();
+    const h = await inboundHarness();
     await h.say('call mom tomorrow');
-    const task = h.db.select().from(tasks).get()!;
+    const task = (await h.db.select().from(tasks).get())!;
     const done = await h.json('PATCH', `/api/tasks/${task.id}`, { status: 'done' });
     expect(done.body.task).toMatchObject({ status: 'done', statusSetLocally: false });
 
@@ -202,7 +199,7 @@ describe('local-first capture', () => {
 
   it('notifies the UI when a message changes data', async () => {
     const topics: string[] = [];
-    const h = inboundHarness({ onChange: (t) => topics.push(t) });
+    const h = await inboundHarness({ onChange: (t) => topics.push(t) });
     await h.say('HELP');
     expect(topics).toEqual([]);
     await h.say('dentist tues 3pm');

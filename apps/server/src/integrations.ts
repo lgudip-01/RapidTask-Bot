@@ -15,13 +15,9 @@ export function integrationStatus(
   deps: { db: Db; scheduler: SyncScheduler; tokenStore: TokenStore | null; llmAvailable: boolean },
 ) {
   return async (): Promise<IntegrationStatus[]> => {
-    const live = new Map(deps.scheduler.status().map((s) => [s.source, s]));
+    const live = new Map((await deps.scheduler.status()).map((s) => [s.source, s]));
     const persisted = new Map(
-      deps.db
-        .select()
-        .from(syncState)
-        .all()
-        .map((r) => [r.source, r]),
+      (await deps.db.select().from(syncState).all()).map((r) => [r.source, r]),
     );
     const sync = (name: string): SyncStatus | null =>
       live.get(name) ??
@@ -50,10 +46,7 @@ export function integrationStatus(
         detail: googleConfigured ? (deps.tokenStore?.kind ?? null) : null,
         connected: googleConnected,
         sync: sync('google_calendar'),
-        help:
-          googleConnected === false
-            ? 'Run `npm run auth:google -w @planner/server` to connect.'
-            : null,
+        help: googleConnected === false ? 'Not connected yet: use Connect Google.' : null,
       },
       {
         id: 'canvas',

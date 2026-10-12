@@ -49,7 +49,8 @@ export const VIEWS = ['today', 'week', 'tasks', 'suggestions', 'settings'] as co
 export type View = (typeof VIEWS)[number];
 
 const readView = (): View => {
-  const v = window.location.hash.replace(/^#\/?/, '');
+  // A query after the view (e.g. #/settings?google=connected) does not change the view.
+  const v = window.location.hash.replace(/^#\/?/, '').replace(/\?.*$/, '');
   return (VIEWS as readonly string[]).includes(v) ? (v as View) : 'today';
 };
 

@@ -43,6 +43,13 @@
       "when": 1791614619711,
       "tag": "0005_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791768093198,
+      "tag": "0006_secrets",
+      "breakpoints": true
     }
   ]
 }

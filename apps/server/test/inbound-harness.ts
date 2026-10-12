@@ -1,3 +1,4 @@
+import type { AppDeps } from '../src/app';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,9 +50,11 @@ export interface HarnessOptions {
   /** Receives the pipeline's change notifications. */
   onChange?: (topic: 'items' | 'suggestions') => void;
   rateLimit?: { limit: number; windowMs: number };
+  /** Serverless keep-alive for webhook processing. */
+  background?: AppDeps['background'];
 }
 
-export function inboundHarness(opts: HarnessOptions = {}) {
+export async function inboundHarness(opts: HarnessOptions = {}) {
   const telegramApi = fakeFetch(() => ({
     status: 200,
     json: { ok: true, result: { message_id: 1 } },
@@ -60,7 +63,7 @@ export function inboundHarness(opts: HarnessOptions = {}) {
   let pipeline!: InboundPipeline;
   let parser!: MessageParser;
 
-  const env = makeTestEnv([], NOW, (db, now) => {
+  const env = await makeTestEnv([], NOW, (db, now) => {
     parser = new MessageParser({ llm: opts.llm ?? null, timeZone: TZ, now });
     const creator = new ItemCreator({ db, now });
     pipeline = new InboundPipeline({
@@ -78,7 +81,7 @@ export function inboundHarness(opts: HarnessOptions = {}) {
       webhookSecret: TG_SECRET,
     });
     const twilio = new TwilioChannel({ ...TWILIO, ownerNumber: OWNER_PHONE, fetch: twilioApi });
-    return { inbound: { pipeline, channels: { telegram, twilio } } };
+    return { inbound: { pipeline, channels: { telegram, twilio } }, background: opts.background };
   });
 
   const postTelegram = async (update: unknown, secret: string | null = TG_SECRET) => {

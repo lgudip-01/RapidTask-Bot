@@ -216,3 +216,14 @@ export const notifications = sqliteTable(
   ],
 );
 export type NotificationRow = typeof notifications.$inferSelect;
+
+/**
+ * Small secrets (the Google refresh token) for hosts without a disk or OS keyring. Values are
+ * AES-256-GCM ciphertext under TOKEN_ENCRYPTION_KEY, never plaintext.
+ */
+export const secrets = sqliteTable('secrets', {
+  key: text('key').primaryKey(),
+  /** JSON {iv, tag, data}, base64. */
+  value: text('value').notNull(),
+  updatedAt: ts('updated_at').notNull(),
+});

@@ -5,7 +5,9 @@ import { AlreadyRunningError, UnknownSourceError } from '../sync/scheduler';
 
 export function syncRoutes({ scheduler }: AppDeps) {
   return new Hono()
-    .get('/status', (c) => c.json<{ sources: SyncStatus[] }>({ sources: scheduler.status() }))
+    .get('/status', async (c) =>
+      c.json<{ sources: SyncStatus[] }>({ sources: await scheduler.status() }),
+    )
     .post('/:source/run', async (c) => {
       const name = c.req.param('source');
       try {

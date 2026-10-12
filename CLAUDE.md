@@ -11,7 +11,7 @@ and accepts new tasks/events by text message from the owner.
 TypeScript everywhere. npm workspaces:
 
 - `apps/web` — Vite + React + Tailwind
-- `apps/server` — Node + Hono, SQLite via Drizzle (SQLite + Litestream/volume for one user)
+- `apps/server` — Node + Hono, SQLite via Drizzle + libSQL (local file in dev, Turso when deployed on Vercel)
 - `packages/shared` — shared types + zod schemas (consumed as TS source by both apps)
 
 ## Principles

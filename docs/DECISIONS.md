@@ -268,3 +268,46 @@ same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our 
   it is sent, and the claim is released if delivery fails so the next tick retries. A restart never
   resends. Claims older than 90 days are pruned.
 - Settings (UI → Notifications): each kind on/off, with its time or lead.
+
+## 019 — Deploy on Vercel: libSQL/Turso, cron heartbeat, Telegram backups (2026-10-11)
+
+- **Context:** the owner chose Vercel for the whole app. Vercel has no persistent disk and no
+  long-running process. The database file, in-process timers, Telegram polling, SSE, file
+  backups, and the file/keyring token stores all assumed one.
+- **Database:** `better-sqlite3` → `@libsql/client` (Drizzle `libsql`). The schema, SQL and
+  migrations are unchanged (still SQLite). Production uses Turso (`TURSO_DATABASE_URL` and
+  `TURSO_AUTH_TOKEN`, as set by Vercel's Turso integration). Locally it is a `file:` URL, and
+  existing database files open as-is. All database access is now async. Tests use a throwaway
+  temp file per database, because libsql swaps in-memory connections after a transaction and
+  the schema is lost. Migrations run on cold start; `includeFiles` ships `apps/server/drizzle`.
+- **Two entry points, one wiring:** `runtime.ts` builds everything from the environment.
+  `index.ts` (Node) adds timers, polling, SSE and `serve()`. `vercel.ts`, bundled to
+  `dist/vercel.js` and re-exported by `api/index.js`, builds one runtime per warm instance.
+  `vercel.json` rewrites `/api`, `/webhooks`, `/cron`, `/auth`, `/login` and `/health` to that
+  function and serves `apps/web/dist` statically.
+- **Periodic work:** `/cron/tick`, behind `Authorization: Bearer CRON_SECRET` (constant-time
+  compare; public path, rate limited), runs `SyncScheduler.runDue()` (sources whose persisted
+  `nextRunAt` has passed, with backoff intact), `Notifier.tick()`, and
+  `BackupService.runIfDue()`. Vercel Hobby only allows daily cron jobs, so `vercel.json` has
+  a daily fallback and an outside pinger (cron-job.org) calls it every 5 minutes. Reminders
+  are accurate to about 5 minutes. The notifications unique index keeps overlapping ticks
+  from double-sending.
+- **Webhooks:** acknowledged immediately; processing is kept alive with `waitUntil`
+  (`AppDeps.background`). Telegram must use webhook mode on Vercel (enforced by env
+  validation).
+- **Live updates:** `/api/stream` answers 204 when `streaming` is false. Per the SSE spec, the
+  browser's EventSource then closes for good, and the web UI polls every 15 s
+  ("Auto-refresh").
+- **Google:** the browser "Connect Google" flow (`/api/google/connect` → `/callback`) uses a
+  Web application client and PKCE, with state and verifier in a 10-minute httpOnly cookie,
+  behind the login. The refresh token is stored in a new `secrets` table, AES-256-GCM under
+  `TOKEN_ENCRYPTION_KEY` (`DbTokenStore`). The CLI flow remains for Desktop clients.
+- **Backups:** `BackupTarget` is either `file` (local snapshots via `VACUUM INTO`; snapshot
+  checks use `node:sqlite`, because libsql holds Windows file handles after `close()`) or
+  `telegram` (the nightly JSON export is sent to the owner as a document). Restore a JSON
+  export with `npm run restore -- --json <file>` (insert-or-skip by id, so repeats are safe).
+  Node ≥ 22.13 for `node:sqlite`.
+- **Deliberately kept in memory (best effort on serverless):** the parser's pending
+  clarification (raw text is never persisted, per the message-privacy rule), the TODAY
+  snapshot for `DONE <n>` (it falls back to recomputing), and the per-IP and per-sender rate
+  limits.
