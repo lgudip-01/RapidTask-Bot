@@ -145,8 +145,8 @@ const EnvSchema = z
         message: 'AUTH_MODE=none requires a loopback HOST',
       });
     }
-    if (e.NODE_ENV === 'production') {
-      // Never expose an unauthenticated planner on the internet.
+    if (e.NODE_ENV === 'production' || e.VERCEL) {
+      // Never expose an unauthenticated planner on the internet (Vercel is always public).
       need('AUTH_MODE', e.AUTH_MODE !== 'none');
       need('PUBLIC_BASE_URL', e.PUBLIC_BASE_URL?.startsWith('https://'));
       if (e.TOKEN_STORE !== 'keyring') need('TOKEN_ENCRYPTION_KEY', e.TOKEN_ENCRYPTION_KEY);

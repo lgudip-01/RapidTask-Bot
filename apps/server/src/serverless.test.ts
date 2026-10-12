@@ -184,3 +184,16 @@ describe('env on Vercel', () => {
     ).toBe('webhook');
   });
 });
+
+describe('env on Vercel without NODE_ENV', () => {
+  it('still requires login and an https public URL', () => {
+    expect(() =>
+      loadEnv({
+        VERCEL: '1',
+        TURSO_DATABASE_URL: 'libsql://planner.turso.io',
+        CRON_SECRET,
+        TOKEN_ENCRYPTION_KEY: KEY,
+      }),
+    ).toThrow(/AUTH_MODE.*PUBLIC_BASE_URL/);
+  });
+});

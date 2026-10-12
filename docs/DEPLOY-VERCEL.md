@@ -43,7 +43,6 @@ Generate each random value in your own terminal (PowerShell or Git Bash, from th
 
 | Variable                   | Value                                                                                                                 |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                 | `production`                                                                                                          |
 | `APP_TIMEZONE`             | e.g. `America/New_York`                                                                                               |
 | `PUBLIC_BASE_URL`          | `https://<your-project>.vercel.app` (the domain Vercel shows; add it after the first deploy if you don't know it yet) |
 | `AUTH_MODE`                | `password`                                                                                                            |
@@ -61,8 +60,9 @@ Generate each random value in your own terminal (PowerShell or Git Bash, from th
 | `CANVAS_TOKEN`             | Canvas → Account → Settings → New access token (optional)                                                             |
 | `ANTHROPIC_API_KEY`        | optional: lets the bot understand free-form texts                                                                     |
 
-Build tools (Vite, tsup) are dev dependencies. `vercel.json` installs them with
-`npm install --include=dev`, so `NODE_ENV=production` doesn't break the build.
+Don't set `NODE_ENV`. On Vercel the production checks always apply, and setting it at build
+time would make npm skip the build tools. (`vercel.json` installs them with `--include=dev`
+anyway.)
 
 The function refuses to start without `TURSO_DATABASE_URL`, `CRON_SECRET`,
 `TOKEN_ENCRYPTION_KEY` and a working login. A missing variable shows up as `503` and an
