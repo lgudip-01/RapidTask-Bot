@@ -64,13 +64,15 @@ export function useView(): [View, (v: View) => void] {
 
 /** Theme preference stored per browser (a convenience, so storage failures are ignored). */
 export type ThemePref = 'system' | 'light' | 'dark';
-const THEME_KEY = 'planner.theme';
+// v2: the old key held an auto-saved "system" from before dark became the default.
+const THEME_KEY = 'planner.theme.v2';
 export function readThemePref(): ThemePref {
   try {
     const v = localStorage.getItem(THEME_KEY);
-    return v === 'light' || v === 'dark' ? v : 'system';
+    // Dark unless the viewer picked something else in Settings.
+    return v === 'light' || v === 'system' ? v : 'dark';
   } catch {
-    return 'system';
+    return 'dark';
   }
 }
 export function applyTheme(pref: ThemePref) {

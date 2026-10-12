@@ -20,7 +20,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Dialog open={open} onClose={onClose} label="Search">
-      <div className="flex items-center gap-2 border-b border-line px-4 focus-within:border-accent">
+      <div className="flex items-center gap-2 border-b border-line px-4 focus-within:border-accent-ink">
         <Search className="size-4 text-faint" aria-hidden />
         <label htmlFor="search-input" className="sr-only">
           Search tasks and events

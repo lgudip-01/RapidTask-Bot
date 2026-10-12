@@ -71,7 +71,7 @@ function SortableTask({ task, overdue }: { task: Task; overdue: boolean }) {
       }}
       className={cx(
         'group/row relative rounded-lg',
-        isDragging && 'bg-surface shadow-card ring-1 ring-accent/40',
+        isDragging && 'bg-surface shadow-card ring-1 ring-accent-ink/40',
       )}
     >
       <TaskRow
@@ -205,7 +205,7 @@ function BoardCard({ task }: { task: Task }) {
       }}
       className={cx(
         'cursor-grab touch-none rounded-xl border border-line bg-surface shadow-card active:cursor-grabbing',
-        isDragging && 'ring-1 ring-accent/50',
+        isDragging && 'ring-1 ring-accent-ink/50',
       )}
       aria-roledescription="draggable task"
     >
@@ -222,7 +222,7 @@ function BoardColumn({ id, title, tasks }: { id: TaskStatus; title: string; task
       aria-label={title}
       className={cx(
         'min-h-48 rounded-2xl border border-line bg-surface-2/60 p-2 transition-colors',
-        isOver && 'border-accent bg-accent-soft/50',
+        isOver && 'border-accent-ink bg-accent-soft/50',
       )}
     >
       <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-faint">

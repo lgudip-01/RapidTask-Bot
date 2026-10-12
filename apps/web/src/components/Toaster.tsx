@@ -31,7 +31,7 @@ export function Toaster() {
                     ? 'mt-0.5 size-4 text-danger'
                     : t.kind === 'success'
                       ? 'mt-0.5 size-4 text-ok'
-                      : 'mt-0.5 size-4 text-accent'
+                      : 'mt-0.5 size-4 text-accent-ink'
                 }
                 aria-hidden
               />

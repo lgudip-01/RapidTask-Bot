@@ -87,7 +87,7 @@ export function SuggestionTray({ compact = false }: { compact?: boolean }) {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-faint">
           Suggestions <span className="font-normal">({items.length})</span>
         </h2>
-        <a href="#/suggestions" className="text-xs text-accent hover:underline">
+        <a href="#/suggestions" className="text-xs text-accent-ink hover:underline">
           Open inbox
         </a>
       </div>

@@ -78,7 +78,7 @@ export function TaskRow({
             />
           </button>
           {task.status === 'doing' && (
-            <span className="rounded bg-accent-soft px-1.5 text-[10px] font-medium text-accent">
+            <span className="rounded bg-accent-soft px-1.5 text-[10px] font-medium text-accent-ink">
               doing
             </span>
           )}

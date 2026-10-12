@@ -63,11 +63,10 @@ const LOGIN_JS = `(() => {
 `;
 
 const page = (error: LoginError | null, next: string) => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#121212">
 <title>Sign in · Planner</title>
 <style>
-:root{color-scheme:light dark;--bg:#f7f7f5;--s:#fff;--l:#e4e4df;--t:#1c1c1a;--m:#6b6b66;--a:#4f46e5;--d:#c2410c;--ds:#fff4ed}
-@media(prefers-color-scheme:dark){:root{--bg:#121212;--s:#1a1a19;--l:#2e2e2b;--t:#ececea;--m:#a3a39c;--a:#8b8cff;--d:#fb923c;--ds:#2a1b12}}
+:root{color-scheme:dark;--bg:#121212;--s:#1a1a19;--l:#2e2e2b;--t:#ececea;--m:#a3a39c;--a:#8c2337;--ai:#e38b9c;--d:#fb923c;--ds:#2a1b12}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--t);font:15px/1.4 Inter,system-ui,sans-serif;padding:16px}
 form{width:100%;max-width:360px;background:var(--s);border:1px solid var(--l);border-radius:16px;padding:28px 24px 22px;box-shadow:0 8px 24px rgb(0 0 0/.06);animation:in .35s ease-out}
 @keyframes in{from{opacity:0;transform:translateY(8px)}}
@@ -80,7 +79,7 @@ input[type=password],input[type=text]{width:100%;height:42px;border:1px solid va
 input[aria-invalid=true]{border-color:var(--d);animation:shake .35s}
 #toggle{position:absolute;right:6px;top:6px;height:30px;padding:0 10px;border:0;border-radius:7px;background:transparent;color:var(--m);font-size:12px;font-weight:600;cursor:pointer}
 #toggle:hover{color:var(--t);background:var(--l)}
-input:focus-visible,button:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+input:focus-visible,button:focus-visible{outline:2px solid var(--ai);outline-offset:2px}
 #submit{margin-top:16px;width:100%;height:42px;border:0;border-radius:10px;background:var(--a);color:#fff;font-weight:600;font-size:14px;cursor:pointer}
 #submit:disabled{opacity:.7;cursor:progress}
 .e{margin-top:12px;padding:8px 10px;border-radius:8px;background:var(--ds);color:var(--d);font-size:13px}

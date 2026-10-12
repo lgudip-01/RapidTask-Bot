@@ -12,7 +12,7 @@ function PreviewChip({ preview }: { preview: ParsePreview }) {
   if (preview.type === 'capture') {
     const Icon = preview.kind === 'event' ? CalendarDays : ListTodo;
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-accent-soft px-2 py-1 text-xs text-accent">
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-accent-soft px-2 py-1 text-xs text-accent-ink">
         <Icon className="size-3.5" aria-hidden />
         <span className="font-medium">{preview.kind === 'event' ? 'Event' : 'Task'}</span>
         <span>
@@ -70,7 +70,7 @@ export const QuickAdd = forwardRef<HTMLInputElement, { onAdded?: () => void; aut
             e.preventDefault();
             void submit();
           }}
-          className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 shadow-card transition-shadow focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/15"
+          className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 shadow-card transition-shadow focus-within:border-accent-ink focus-within:ring-4 focus-within:ring-accent-ink/15"
         >
           <label htmlFor="quick-add" className="sr-only">
             Add a task or event in plain words

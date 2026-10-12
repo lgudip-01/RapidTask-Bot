@@ -414,7 +414,7 @@ function OpenLink({ url, label }: { url: string | null; label: string }) {
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-ink hover:underline"
     >
       Open in {label} <ExternalLink className="size-3.5" aria-hidden />
     </a>
