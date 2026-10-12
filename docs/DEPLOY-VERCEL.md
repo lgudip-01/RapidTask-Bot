@@ -61,6 +61,9 @@ Generate each random value in your own terminal (PowerShell or Git Bash, from th
 | `CANVAS_TOKEN`             | Canvas → Account → Settings → New access token (optional)                                                             |
 | `ANTHROPIC_API_KEY`        | optional: lets the bot understand free-form texts                                                                     |
 
+Build tools (Vite, tsup) are dev dependencies. `vercel.json` installs them with
+`npm install --include=dev`, so `NODE_ENV=production` doesn't break the build.
+
 The function refuses to start without `TURSO_DATABASE_URL`, `CRON_SECRET`,
 `TOKEN_ENCRYPTION_KEY` and a working login. A missing variable shows up as `503` and an
 `Invalid environment: …` line naming it (never its value) in **Vercel → Logs**.
