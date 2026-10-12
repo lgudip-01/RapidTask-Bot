@@ -1,5 +1,5 @@
 import type { Db } from '../db/client';
-import type { Env } from '../env';
+import { appOrigins, type Env } from '../env';
 import { log } from '../log';
 import type { MessageParser } from '../parser/parser';
 import type { ItemCreator } from './creator';
@@ -61,9 +61,9 @@ export function createInbound(
     env.TWILIO_FROM_NUMBER &&
     env.OWNER_PHONE_E164
   ) {
+    const origin = appOrigins(env).primary;
     const webhookUrl =
-      env.TWILIO_WEBHOOK_URL ??
-      (env.PUBLIC_BASE_URL ? new URL('/webhooks/twilio', env.PUBLIC_BASE_URL).toString() : null);
+      env.TWILIO_WEBHOOK_URL ?? (origin ? new URL('/webhooks/twilio', origin).toString() : null);
     if (!webhookUrl)
       throw new Error('Set PUBLIC_BASE_URL (or TWILIO_WEBHOOK_URL) for Twilio signature checks');
     channels.twilio = new TwilioChannel({

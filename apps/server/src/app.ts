@@ -120,9 +120,12 @@ export function createApp(deps: AppDeps) {
         now: sec.now,
       }),
     );
-    app.use('*', sameOriginWrites(sec.publicOrigin));
+    app.use('*', sameOriginWrites(sec.publicOrigin, sec.trustedOrigins));
     if (sec.publicOrigin)
-      app.use('/api/*', cors({ origin: [sec.publicOrigin], credentials: true }));
+      app.use(
+        '/api/*',
+        cors({ origin: [sec.publicOrigin, ...(sec.trustedOrigins ?? [])], credentials: true }),
+      );
     app.use('*', requireAuth(sec.auth, sec.now));
     app.route('/', authRoutes(sec));
   }

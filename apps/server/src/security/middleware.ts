@@ -14,6 +14,8 @@ export interface SecurityConfig {
   auth: AuthConfig;
   /** https origin of the deployment; enables the same-origin check, CORS allowlist, and HSTS. */
   publicOrigin?: string;
+  /** Other origins of this same app (e.g. Vercel deployment URLs) allowed to post and call /api. */
+  trustedOrigins?: string[];
   /** Trust Fly-Client-IP / X-Forwarded-* (only behind a proxy that sets them). */
   trustProxy: boolean;
   webhookRateLimitPerMin: number;
@@ -26,13 +28,14 @@ export interface SecurityConfig {
  * Paths reachable without a session. Webhooks authenticate with provider signatures, cron with a
  * bearer secret.
  */
-/** /login and /auth/login exist only in password mode (rate limited); they reveal nothing. */
+/** /login, /auth/login (rate limited) and its script exist only in password mode; they reveal nothing. */
 export const PUBLIC_PATHS = [
   /^\/webhooks\//,
   /^\/cron\//,
   /^\/health$/,
   /^\/login$/,
   /^\/auth\/login$/,
+  /^\/auth\/login\.js$/,
 ];
 const isPublic = (path: string) => PUBLIC_PATHS.some((re) => re.test(path));
 
@@ -95,7 +98,11 @@ export function httpsOnly(trustProxy: boolean): MiddlewareHandler {
  * Same-origin guard for state-changing requests (CSRF defense on top of SameSite cookies):
  * the Origin header must match the deployment, or the browser must say same-origin.
  */
-export function sameOriginWrites(publicOrigin?: string): MiddlewareHandler {
+export function sameOriginWrites(
+  publicOrigin?: string,
+  trustedOrigins: string[] = [],
+): MiddlewareHandler {
+  const trusted = new Set([...(publicOrigin ? [publicOrigin] : []), ...trustedOrigins]);
   return async (c, next) => {
     const m = c.req.method;
     if (
@@ -108,11 +115,14 @@ export function sameOriginWrites(publicOrigin?: string): MiddlewareHandler {
     }
     const origin = c.req.header('origin');
     const site = c.req.header('sec-fetch-site');
-    const expected = publicOrigin ?? new URL(c.req.url).origin;
+    // The page that posted is on the address being requested (a browser cannot forge that for a
+    // cross-site request), or on one of this app's known addresses.
+    const self = new URL(c.req.url).origin;
+    const known = (o: string) => o === self || trusted.has(o);
     // An opaque `Origin: null` (privacy-sensitive contexts) falls back to Fetch Metadata.
     const ok =
       origin && origin !== 'null'
-        ? origin === expected
+        ? known(origin)
         : origin === 'null'
           ? site === 'same-origin'
           : site === 'same-origin' || site === 'none' || site === undefined;

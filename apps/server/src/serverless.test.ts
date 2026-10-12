@@ -3,7 +3,7 @@ import { fakeFetch } from '../test/fake-fetch';
 import { fakeSource, makeTestEnv } from '../test/helpers';
 import { inboundHarness, ownerUpdate } from '../test/inbound-harness';
 import { secrets } from './db/schema';
-import { loadEnv } from './env';
+import { appOrigins, loadEnv } from './env';
 import { REFRESH_TOKEN_KEY } from './google/oauth';
 import { DbTokenStore, MemoryTokenStore } from './secrets/token-store';
 
@@ -195,5 +195,34 @@ describe('env on Vercel without NODE_ENV', () => {
         TOKEN_ENCRYPTION_KEY: KEY,
       }),
     ).toThrow(/AUTH_MODE.*PUBLIC_BASE_URL/);
+  });
+});
+
+describe('appOrigins', () => {
+  const base = loadEnv({});
+  it('prefers the production domain Vercel reports over a stale PUBLIC_BASE_URL', () => {
+    expect(
+      appOrigins({
+        ...base,
+        VERCEL: '1',
+        PUBLIC_BASE_URL: 'https://rapid-task.vercel.app',
+        VERCEL_PROJECT_PRODUCTION_URL: 'rapid-task-lgudip-01.vercel.app',
+        VERCEL_URL: 'rapid-task-abc123.vercel.app',
+      }),
+    ).toEqual({
+      primary: 'https://rapid-task-lgudip-01.vercel.app',
+      trusted: [
+        'https://rapid-task-lgudip-01.vercel.app',
+        'https://rapid-task.vercel.app',
+        'https://rapid-task-abc123.vercel.app',
+      ],
+    });
+  });
+
+  it('uses PUBLIC_BASE_URL off Vercel', () => {
+    expect(appOrigins({ ...base, PUBLIC_BASE_URL: 'https://planner.example.com/x' })).toEqual({
+      primary: 'https://planner.example.com',
+      trusted: ['https://planner.example.com'],
+    });
   });
 });

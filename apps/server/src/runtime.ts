@@ -6,7 +6,7 @@ import { CanvasIcsSource } from './canvas/canvas-ics-source';
 import { CanvasSource } from './canvas/canvas-source';
 import { ChangeBus } from './changes';
 import { createDb } from './db/client';
-import { isServerless, type Env } from './env';
+import { appOrigins, isServerless, type Env } from './env';
 import { GoogleCalendarClient } from './google/calendar-client';
 import { GoogleCalendarSource } from './google/calendar-source';
 import { GOOGLE_REVOKE_URL, GoogleAuth, REFRESH_TOKEN_KEY } from './google/oauth';
@@ -36,6 +36,7 @@ export async function createRuntime(
   opts: { background?: (work: Promise<unknown>) => void } = {},
 ) {
   const serverless = isServerless(env);
+  const origins = appOrigins(env);
   const db = await createDb(env.TURSO_DATABASE_URL ?? env.DATABASE_PATH, env.TURSO_AUTH_TOKEN);
   const now = () => new Date();
   const settings = new SettingsStore(db, now);
@@ -120,7 +121,7 @@ export async function createRuntime(
   }
 
   const security: SecurityConfig | undefined =
-    env.AUTH_MODE === 'none' && !env.PUBLIC_BASE_URL
+    env.AUTH_MODE === 'none' && !origins.primary
       ? undefined
       : {
           auth:
@@ -140,7 +141,8 @@ export async function createRuntime(
                     ),
                   }
                 : { mode: 'none' },
-          publicOrigin: env.PUBLIC_BASE_URL ? new URL(env.PUBLIC_BASE_URL).origin : undefined,
+          publicOrigin: origins.primary,
+          trustedOrigins: origins.trusted,
           // Vercel always sits behind its proxy, which sets X-Forwarded-For.
           trustProxy: env.TRUST_PROXY || serverless,
           webhookRateLimitPerMin: env.WEBHOOK_RATE_LIMIT_PER_MIN,
@@ -247,7 +249,7 @@ export async function createRuntime(
         ? {
             client: googleClient,
             tokenStore,
-            publicOrigin: env.PUBLIC_BASE_URL ? new URL(env.PUBLIC_BASE_URL).origin : undefined,
+            publicOrigin: origins.primary,
             onConnected: () => scheduler.run('google_calendar'),
           }
         : undefined,

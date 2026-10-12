@@ -21,6 +21,10 @@ const EnvSchema = z
     TURSO_AUTH_TOKEN: optionalString,
     /** Set by Vercel on its build and functions: no disk, no long-running process. */
     VERCEL: optionalString,
+    /** Vercel system variables (hostnames, no scheme): production domain, this deployment, branch. */
+    VERCEL_PROJECT_PRODUCTION_URL: optionalString,
+    VERCEL_URL: optionalString,
+    VERCEL_BRANCH_URL: optionalString,
     /** Bearer secret for /cron/tick (Vercel Cron and outside pingers send `Authorization: Bearer`). */
     CRON_SECRET: optionalString.pipe(z.string().min(16).optional()),
 
@@ -148,7 +152,10 @@ const EnvSchema = z
     if (e.NODE_ENV === 'production' || e.VERCEL) {
       // Never expose an unauthenticated planner on the internet (Vercel is always public).
       need('AUTH_MODE', e.AUTH_MODE !== 'none');
-      need('PUBLIC_BASE_URL', e.PUBLIC_BASE_URL?.startsWith('https://'));
+      need(
+        'PUBLIC_BASE_URL',
+        e.PUBLIC_BASE_URL?.startsWith('https://') || (e.VERCEL && e.VERCEL_PROJECT_PRODUCTION_URL),
+      );
       if (e.TOKEN_STORE !== 'keyring') need('TOKEN_ENCRYPTION_KEY', e.TOKEN_ENCRYPTION_KEY);
     }
     if (e.VERCEL) {
@@ -164,6 +171,19 @@ const EnvSchema = z
   });
 
 export type Env = z.infer<typeof EnvSchema>;
+
+/**
+ * The app's own https origins. On Vercel, the production domain Vercel reports is the primary one
+ * (it follows custom domains), so a stale PUBLIC_BASE_URL can't lock you out; PUBLIC_BASE_URL and
+ * this deployment's own URLs are trusted too.
+ */
+export function appOrigins(e: Env): { primary?: string; trusted: string[] } {
+  const https = (host?: string) => (host ? `https://${host}` : undefined);
+  const configured = e.PUBLIC_BASE_URL ? new URL(e.PUBLIC_BASE_URL).origin : undefined;
+  const primary = (e.VERCEL ? https(e.VERCEL_PROJECT_PRODUCTION_URL) : undefined) ?? configured;
+  const all = [primary, configured, https(e.VERCEL_URL), https(e.VERCEL_BRANCH_URL)];
+  return { primary, trusted: [...new Set(all.filter((o): o is string => Boolean(o)))] };
+}
 
 /** Serverless (Vercel) vs a long-running Node process. */
 export const isServerless = (e: Env) => Boolean(e.VERCEL);

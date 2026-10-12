@@ -90,7 +90,39 @@ describe('password login', () => {
     });
     expect(other.status).toBe(303);
     expect(other.headers.get('set-cookie')).toBeNull();
-    expect(await text(other.headers.get('location')!)).toContain(`Sign in at ${ORIGIN}`);
+    expect(await text(other.headers.get('location')!)).toContain(`Please sign in at ${ORIGIN}.`);
+  });
+
+  it('accepts a sign-in posted from the address being visited, even if PUBLIC_BASE_URL differs', async () => {
+    const e = await env();
+    // e.g. PUBLIC_BASE_URL is stale and the browser is on the real Vercel domain.
+    const res = await e.req('https://rapid-task-lgudip-01.vercel.app/auth/login', {
+      method: 'POST',
+      headers: {
+        origin: 'https://rapid-task-lgudip-01.vercel.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ password: PASSWORD }).toString(),
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/');
+    expect(res.headers.get('set-cookie')).toMatch(/planner_session=/);
+  });
+
+  it('serves the login page script without a session, and the page loads it', async () => {
+    const e = await env();
+    const js = await e.req('/auth/login.js');
+    expect(js.status).toBe(200);
+    expect(js.headers.get('content-type')).toMatch(/javascript/);
+    const html = await (await e.req('/login')).text();
+    expect(html).toContain('<script src="/auth/login.js" defer></script>');
+    expect(html).not.toMatch(/<script>/); // no inline script (CSP)
+  });
+
+  it('marks the field invalid only for a wrong password', async () => {
+    const e = await env();
+    expect(await (await e.req('/login?e=1')).text()).toContain('aria-invalid="true"');
+    expect(await (await e.req('/login?e=locked')).text()).not.toContain('aria-invalid="true"');
   });
 
   it('explains a malformed password hash instead of failing', async () => {
