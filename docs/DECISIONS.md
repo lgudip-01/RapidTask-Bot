@@ -324,4 +324,5 @@ same-origin` (not `no-referrer`: that makes browsers send `Origin: null` on our 
 - The token store is created whenever possible, not only when Google is configured.
 - Theme: dark by default (storage key `planner.theme.v2`, so the old auto-saved "system" is
   ignored). The accent is maroon, split into `--accent` (fills behind white text, 8.7:1) and
-  `--accent-ink` (text, borders and rings; 7:1 on dark surfaces).
+  `--accent-ink` (text, borders and rings; 7:1 on dark surfaces). Changed 2026-10-12 to rust
+  brown `#733001` (fill, 9.8:1 with white) with `#d9a27c` as the dark-theme ink (7.4–8.4:1).

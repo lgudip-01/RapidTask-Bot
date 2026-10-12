@@ -4,7 +4,8 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Theme tokens: neutral surfaces with a maroon accent; swap these values to re-theme the app.
+ * Theme tokens: neutral surfaces with a rust-brown (#733001) accent; swap these values to
+ * re-theme the app.
  * `--accent` fills (buttons, badges with white text); `--accent-ink` is the readable accent for
  * text, borders and rings on the page background.
  * Each source also has a shape (bar / square / dot) so color is never the only cue.
@@ -17,9 +18,9 @@
   --text: #1c1c1a;
   --muted: #6b6b66;
   --faint: #9a9a93;
-  --accent: #8c2337;
-  --accent-ink: #7a1e30;
-  --accent-soft: #f8e9ec;
+  --accent: #733001;
+  --accent-ink: #5e2701;
+  --accent-soft: #f7ece3;
   --danger: #c2410c;
   --danger-soft: #fff1e8;
   --ok: #15803d;
@@ -28,7 +29,7 @@
   --warn-soft: #fff8e6;
   --src-google_calendar: #2563eb;
   --src-canvas: #dc2626;
-  --src-local: #8c2337;
+  --src-local: #733001;
   --now: #e11d48;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
 }
@@ -41,9 +42,9 @@
   --text: #ececea;
   --muted: #a3a39c;
   --faint: #75756f;
-  --accent: #8c2337;
-  --accent-ink: #e38b9c;
-  --accent-soft: #34171d;
+  --accent: #733001;
+  --accent-ink: #d9a27c;
+  --accent-soft: #2e1b0e;
   --danger: #fb923c;
   --danger-soft: #3a2113;
   --ok: #4ade80;
@@ -52,7 +53,7 @@
   --warn-soft: #2f2610;
   --src-google_calendar: #60a5fa;
   --src-canvas: #f87171;
-  --src-local: #c45a6e;
+  --src-local: #c27a45;
   --now: #fb7185;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
 }

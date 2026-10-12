@@ -66,7 +66,7 @@ const page = (error: LoginError | null, next: string) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#121212">
 <title>Sign in · Planner</title>
 <style>
-:root{color-scheme:dark;--bg:#121212;--s:#1a1a19;--l:#2e2e2b;--t:#ececea;--m:#a3a39c;--a:#8c2337;--ai:#e38b9c;--d:#fb923c;--ds:#2a1b12}
+:root{color-scheme:dark;--bg:#121212;--s:#1a1a19;--l:#2e2e2b;--t:#ececea;--m:#a3a39c;--a:#733001;--ai:#d9a27c;--d:#fb923c;--ds:#2a1b12}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--t);font:15px/1.4 Inter,system-ui,sans-serif;padding:16px}
 form{width:100%;max-width:360px;background:var(--s);border:1px solid var(--l);border-radius:16px;padding:28px 24px 22px;box-shadow:0 8px 24px rgb(0 0 0/.06);animation:in .35s ease-out}
 @keyframes in{from{opacity:0;transform:translateY(8px)}}
